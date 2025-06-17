@@ -1,126 +1,31 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
-import { useAuth } from '@/contexts/AuthContext'
+import { useState, useEffect } from 'react'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import OrderDetailsDialog from '@/components/OrderDetailsDialog'
-import { ShoppingCart, Clock, CheckCircle, XCircle, ChefHat, TrendingUp, Users, DollarSign, Search, AlertTriangle } from "lucide-react"
 import { Input } from "@/components/ui/input"
-import { 
-  subscribeToOrders,
-  type Order 
-} from '@/firebase/restaurant-service'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Search, ShoppingCart, DollarSign, TrendingUp, Clock, AlertTriangle, CheckCircle, User, XCircle } from "lucide-react"
+import { updateOrderStatus, type Order } from '@/firebase/restaurant-service'
+import { useAuth } from '@/contexts/AuthContext'
+import OrderDetailsDialog from '@/components/OrderDetailsDialog'
+import { toast } from 'sonner'
 
 export default function OrdersPage() {
   const { restaurantName } = useAuth()
-  const { pendingOrders } = useNotifications()
-  const [orders, setOrders] = useState<Order[]>([])
-  const [loading, setLoading] = useState(true)
+  const { orders, pendingOrders } = useNotifications()
+  const [searchTerm, setSearchTerm] = useState('')
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [isOrderDialogOpen, setIsOrderDialogOpen] = useState(false)
-  const [searchTerm, setSearchTerm] = useState('')
 
-  useEffect(() => {
-    if (!restaurantName) return
-
-    const unsubscribe = subscribeToOrders(restaurantName, (orderData) => {
-      setOrders(orderData)
-      setLoading(false)
-    })
-
-    return () => unsubscribe()
-  }, [restaurantName])
-
-  const getStatusIcon = (status: Order['status']) => {
-    switch (status) {
-      case 'pending':
-        return <Clock className="h-4 w-4 text-yellow-500" />
-      case 'preparing':
-        return <ChefHat className="h-4 w-4 text-blue-500" />
-      case 'ready':
-        return <CheckCircle className="h-4 w-4 text-green-500" />
-      case 'served':
-        return <CheckCircle className="h-4 w-4 text-green-600" />
-      case 'cancelled':
-        return <XCircle className="h-4 w-4 text-red-500" />
-      default:
-        return <Clock className="h-4 w-4 text-gray-500" />
-    }
-  }
-
-  const getStatusColor = (status: Order['status']) => {
-    switch (status) {
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200'
-      case 'preparing':
-        return 'bg-blue-100 text-blue-800 border-blue-200'
-      case 'ready':
-        return 'bg-green-100 text-green-800 border-green-200'
-      case 'served':
-        return 'bg-green-100 text-green-800 border-green-200'
-      case 'cancelled':
-        return 'bg-red-100 text-red-800 border-red-200'
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200'
-    }
-  }
-
-  // Enhanced timing calculation
-  const getOrderTiming = (order: Order) => {
-    const now = new Date()
-    
-    if (order.status === 'pending') {
-      const minutesAgo = Math.floor((now.getTime() - order.createdAt.getTime()) / 60000)
-      const isUrgent = minutesAgo > 15 // Orders older than 15 minutes are urgent
-      return {
-        text: `${minutesAgo}m waiting`,
-        isUrgent,
-        urgencyLevel: minutesAgo > 30 ? 'critical' : minutesAgo > 15 ? 'warning' : 'normal'
-      }
-    } else if (order.status === 'served') {
-      // Calculate total completion time
-      const servedStatus = order.statusHistory?.find(s => s.status === 'served')
-      if (servedStatus) {
-        const totalMinutes = Math.floor((servedStatus.timestamp.getTime() - order.createdAt.getTime()) / 60000)
-        return {
-          text: `${totalMinutes}m total`,
-          isUrgent: false,
-          urgencyLevel: 'completed'
-        }
-      }
-    } else if (order.status === 'preparing') {
-      const preparingStatus = order.statusHistory?.find(s => s.status === 'preparing')
-      if (preparingStatus) {
-        const preparingMinutes = Math.floor((now.getTime() - preparingStatus.timestamp.getTime()) / 60000)
-        return {
-          text: `${preparingMinutes}m preparing`,
-          isUrgent: preparingMinutes > 20,
-          urgencyLevel: preparingMinutes > 25 ? 'critical' : preparingMinutes > 20 ? 'warning' : 'normal'
-        }
-      }
-    } else if (order.status === 'ready') {
-      const readyStatus = order.statusHistory?.find(s => s.status === 'ready')
-      if (readyStatus) {
-        const readyMinutes = Math.floor((now.getTime() - readyStatus.timestamp.getTime()) / 60000)
-        return {
-          text: `${readyMinutes}m ready`,
-          isUrgent: readyMinutes > 5, // Food getting cold
-          urgencyLevel: readyMinutes > 10 ? 'critical' : readyMinutes > 5 ? 'warning' : 'normal'
-        }
-      }
-    }
-    
-    const minutesAgo = Math.floor((now.getTime() - order.updatedAt.getTime()) / 60000)
-    return {
-      text: `${minutesAgo}m ago`,
-      isUrgent: false,
-      urgencyLevel: 'normal'
-    }
-  }
+  // Filter orders based on search term
+  const filteredOrders = orders.filter(order =>
+    order.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    order.tableNumber.toString().includes(searchTerm)
+  )
 
   // Calculate statistics
   const todayOrders = orders.filter(order => {
@@ -132,25 +37,75 @@ export default function OrdersPage() {
     .filter(order => order.status === 'served')
     .reduce((sum, order) => sum + order.totalAmount, 0)
 
-  const averageOrderValue = orders.length > 0 
-    ? orders.reduce((sum, order) => sum + order.totalAmount, 0) / orders.length 
-    : 0
+  const averageOrderValue = orders.length > 0 ? totalRevenue / orders.filter(order => order.status === 'served').length : 0
 
-  // Filter orders based on search
-  const filteredOrders = orders.filter(order =>
-    order.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.customerPhone?.includes(searchTerm) ||
-    order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.tableNumber.toString().includes(searchTerm) ||
-    order.status.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  // Helper functions
+  const getStatusIcon = (status: Order['status']) => {
+    switch (status) {
+      case 'pending':
+        return <Clock className="h-4 w-4" />
+      case 'preparing':
+        return <User className="h-4 w-4" />
+      case 'ready':
+        return <CheckCircle className="h-4 w-4" />
+      case 'served':
+        return <CheckCircle className="h-4 w-4" />
+      case 'cancelled':
+        return <XCircle className="h-4 w-4" />
+      default:
+        return <Clock className="h-4 w-4" />
+    }
+  }
+
+  const getStatusColor = (status: Order['status']) => {
+    switch (status) {
+      case 'pending':
+        return 'bg-orange-100 text-orange-800 hover:bg-orange-200'
+      case 'preparing':
+        return 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+      case 'ready':
+        return 'bg-green-100 text-green-800 hover:bg-green-200'
+      case 'served':
+        return 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+      case 'cancelled':
+        return 'bg-red-100 text-red-800 hover:bg-red-200'
+      default:
+        return 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+    }
+  }
+
+  const getOrderTiming = (order: Order) => {
+    const now = new Date()
+    const minutesAgo = Math.floor((now.getTime() - order.createdAt.getTime()) / 60000)
+    
+    if (order.status === 'pending') {
+      return {
+        text: `${minutesAgo}m waiting`,
+        urgencyLevel: minutesAgo > 30 ? 'critical' : minutesAgo > 15 ? 'warning' : 'normal'
+      }
+    } else if (order.status === 'served') {
+      const servedStatus = order.statusHistory?.find(s => s.status === 'served')
+      if (servedStatus) {
+        const totalTime = Math.floor((servedStatus.timestamp.getTime() - order.createdAt.getTime()) / 60000)
+        return {
+          text: `${totalTime}m total`,
+          urgencyLevel: 'normal'
+        }
+      }
+    }
+    
+    return {
+      text: `${minutesAgo}m ago`,
+      urgencyLevel: 'normal'
+    }
+  }
 
   const handleOrderClick = (order: Order) => {
     setSelectedOrder(order)
     setIsOrderDialogOpen(true)
   }
 
-  if (loading) {
+  if (!orders) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -162,11 +117,11 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6 p-3 sm:p-0">
+    <div className="space-y-6 p-6">
       {/* Header */}
       <div>
-        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Order Management</h1>
-        <p className="text-sm sm:text-base text-muted-foreground">
+        <h1 className="text-3xl font-bold tracking-tight">Order Management</h1>
+        <p className="text-muted-foreground">
           Track and manage all your restaurant orders in real-time
         </p>
       </div>
@@ -228,14 +183,14 @@ export default function OrdersPage() {
       )}
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Total Orders</CardTitle>
-            <ShoppingCart className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
+            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-lg sm:text-2xl font-bold">{orders.length}</div>
+            <div className="text-2xl font-bold">{orders.length}</div>
             <p className="text-xs text-muted-foreground">
               {todayOrders.length} today
             </p>
@@ -244,11 +199,11 @@ export default function OrdersPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Revenue</CardTitle>
-            <DollarSign className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Revenue</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-lg sm:text-2xl font-bold">₹{totalRevenue.toFixed(0)}</div>
+            <div className="text-2xl font-bold">₹{totalRevenue.toFixed(0)}</div>
             <p className="text-xs text-muted-foreground">
               Completed orders
             </p>
@@ -257,11 +212,11 @@ export default function OrdersPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Avg Value</CardTitle>
-            <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Avg Value</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-lg sm:text-2xl font-bold">₹{averageOrderValue.toFixed(0)}</div>
+            <div className="text-2xl font-bold">₹{averageOrderValue.toFixed(0)}</div>
             <p className="text-xs text-muted-foreground">
               Per order
             </p>
@@ -270,11 +225,11 @@ export default function OrdersPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Active</CardTitle>
-            <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Active</CardTitle>
+            <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-lg sm:text-2xl font-bold">
+            <div className="text-2xl font-bold">
               {orders.filter(order => ['pending', 'preparing', 'ready'].includes(order.status)).length}
             </div>
             <p className="text-xs text-muted-foreground">
@@ -287,97 +242,69 @@ export default function OrdersPage() {
       {/* Orders Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg sm:text-xl">Order History</CardTitle>
-          <CardDescription className="text-sm">
+          <CardTitle>Order History</CardTitle>
+          <CardDescription>
             Complete history of all orders placed at your restaurant
           </CardDescription>
         </CardHeader>
         <CardContent>
           {/* Search */}
-          <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 mb-4 sm:mb-6">
+          <div className="flex items-center space-x-2 mb-6">
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
                 placeholder="Search orders..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 text-sm"
+                className="pl-10"
               />
             </div>
             {searchTerm && (
-              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs">
+              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
                 {filteredOrders.length} result{filteredOrders.length !== 1 ? 's' : ''}
               </Badge>
             )}
           </div>
-                      {orders.length === 0 ? (
-              <div className="text-center py-16">
-                <div className="mx-auto w-24 h-24 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center mb-6">
-                  <ShoppingCart className="h-12 w-12 text-blue-600" />
-                </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">No Orders Yet</h3>
-                <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                  Your order history will appear here once customers start placing orders. 
-                  Get ready to serve amazing food! 🍽️
-                </p>
-                <div className="space-y-2 text-sm text-gray-500">
-                  <p>💡 <strong>Tip:</strong> Share your menu with customers to get started</p>
-                  <p>🚀 <strong>Pro tip:</strong> Great service leads to repeat customers</p>
-                </div>
+
+          {orders.length === 0 ? (
+            <div className="text-center py-16">
+              <div className="mx-auto w-24 h-24 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center mb-6">
+                <ShoppingCart className="h-12 w-12 text-blue-600" />
               </div>
-            ) : filteredOrders.length === 0 ? (
-              <div className="text-center py-16">
-                <div className="mx-auto w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-6">
-                  <Search className="h-12 w-12 text-gray-400" />
-                </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">No Results Found</h3>
-                <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                  No orders match your search criteria. Try adjusting your search terms.
-                </p>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">No Orders Yet</h3>
+              <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                Your order history will appear here once customers start placing orders. 
+                Get ready to serve amazing food! 🍽️
+              </p>
+            </div>
+          ) : filteredOrders.length === 0 ? (
+            <div className="text-center py-16">
+              <div className="mx-auto w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-6">
+                <Search className="h-12 w-12 text-gray-400" />
               </div>
-            ) : (
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">No Results Found</h3>
+              <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                No orders match your search criteria. Try adjusting your search terms.
+              </p>
+            </div>
+          ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-xs sm:text-sm">Order ID</TableHead>
-                    <TableHead className="text-xs sm:text-sm">Customer</TableHead>
-                    <TableHead className="text-xs sm:text-sm">Table</TableHead>
-                    <TableHead className="text-xs sm:text-sm">Items</TableHead>
-                    <TableHead className="text-xs sm:text-sm">Total</TableHead>
-                    <TableHead className="text-xs sm:text-sm">Status</TableHead>
-                    <TableHead className="text-xs sm:text-sm">Timing</TableHead>
-                    <TableHead className="text-xs sm:text-sm">Date</TableHead>
+                    <TableHead>Order ID</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Table</TableHead>
+                    <TableHead>Items</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Timing</TableHead>
+                    <TableHead>Date</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredOrders.map((order) => {
-                    const getOrderTiming = () => {
-                      const now = new Date()
-                      if (order.status === 'pending') {
-                        const minutesAgo = Math.floor((now.getTime() - order.createdAt.getTime()) / 60000)
-                        return {
-                          text: `${minutesAgo}m waiting`,
-                          color: minutesAgo > 15 ? 'text-red-600' : minutesAgo > 10 ? 'text-yellow-600' : 'text-gray-600'
-                        }
-                      } else if (order.status === 'served') {
-                        const servedStatus = order.statusHistory?.find(s => s.status === 'served')
-                        if (servedStatus) {
-                          const totalTime = Math.floor((servedStatus.timestamp.getTime() - order.createdAt.getTime()) / 60000)
-                          return {
-                            text: `${totalTime}m total`,
-                            color: 'text-green-600'
-                          }
-                        }
-                      }
-                      const minutesAgo = Math.floor((now.getTime() - order.updatedAt.getTime()) / 60000)
-                      return {
-                        text: `${minutesAgo}m ago`,
-                        color: 'text-gray-600'
-                      }
-                    }
-
-                    const timing = getOrderTiming()
+                    const timing = getOrderTiming(order)
 
                     return (
                       <TableRow 
@@ -385,10 +312,10 @@ export default function OrdersPage() {
                         className="cursor-pointer hover:bg-gray-50 transition-colors"
                         onClick={() => handleOrderClick(order)}
                       >
-                        <TableCell className="font-medium text-xs sm:text-sm">
+                        <TableCell className="font-medium">
                           #{order.id.slice(-6).toUpperCase()}
                         </TableCell>
-                        <TableCell className="text-xs sm:text-sm">
+                        <TableCell>
                           <div>
                             <p className="font-medium">{order.customerName}</p>
                             {order.customerPhone && (
@@ -396,10 +323,10 @@ export default function OrdersPage() {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="text-xs sm:text-sm">
-                          <Badge variant="outline" className="text-xs">Table {order.tableNumber}</Badge>
+                        <TableCell>
+                          <Badge variant="outline">Table {order.tableNumber}</Badge>
                         </TableCell>
-                        <TableCell className="text-xs sm:text-sm">
+                        <TableCell>
                           <div className="space-y-1">
                             {order.items.slice(0, 2).map((item, index) => (
                               <div key={index} className="text-sm">
@@ -425,7 +352,10 @@ export default function OrdersPage() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <div className={`text-sm font-medium ${timing.color}`}>
+                          <div className={`text-sm font-medium ${
+                            timing.urgencyLevel === 'critical' ? 'text-red-600' :
+                            timing.urgencyLevel === 'warning' ? 'text-yellow-600' : 'text-gray-600'
+                          }`}>
                             {timing.text}
                           </div>
                         </TableCell>
@@ -435,8 +365,9 @@ export default function OrdersPage() {
                       </TableRow>
                     )
                   })}
-              </TableBody>
-            </Table>
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

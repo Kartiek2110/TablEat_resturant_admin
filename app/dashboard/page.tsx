@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -31,29 +31,33 @@ import {
   type Restaurant
 } from '@/firebase/restaurant-service'
 import SubscriptionStatus from '@/components/SubscriptionStatus'
+import { NotificationList } from '@/components/notification-list'
 
 export default function Dashboard() {
   const { user, restaurantName } = useAuth()
-  const { notifications } = useNotifications()
-  const [orders, setOrders] = useState<Order[]>([])
+  const { orders, pendingOrders } = useNotifications()
+  const [restaurant, setRestaurant] = useState<Restaurant | null>(null)
   const [tables, setTables] = useState<Table[]>([])
   const [menuItems, setMenuItems] = useState<MenuItem[]>([])
-  const [restaurant, setRestaurant] = useState<Restaurant | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [isOrderDialogOpen, setIsOrderDialogOpen] = useState(false)
 
+  // Use refs to track subscriptions
+  const unsubscribeRefs = useRef<{
+    tables?: () => void
+    menu?: () => void
+  }>({})
+
+  // Optimized initialization with reduced subscriptions
   useEffect(() => {
     if (!user?.email || !restaurantName) return
-
-    let unsubscribeOrders: (() => void) | undefined
-    let unsubscribeTables: (() => void) | undefined
-    let unsubscribeMenu: (() => void) | undefined
 
     const initializeRestaurant = async () => {
       try {
         setLoading(true)
+        setError(null)
         
         // Check if restaurant exists
         let restaurantData = await getRestaurantByAdminEmail(user.email!)
@@ -65,30 +69,16 @@ export default function Dashboard() {
         
         setRestaurant(restaurantData)
 
-        // Set up real-time subscriptions
-        unsubscribeOrders = subscribeToOrders(restaurantName, (orderData) => {
-          
-          // Auto-occupy tables for new pending orders
-          orderData.forEach(async (order) => {
-            if (order.status === 'pending') {
-              try {
-                await updateTableStatus(restaurantName, order.tableNumber, true, order.id)
-              } catch (error) {
-                console.error('Error auto-occupying table:', error)
-              }
-            }
-          })
-          
-          setOrders(orderData)
-        })
+        // Only subscribe to tables and menu (orders handled by NotificationContext)
+        const { subscribeToTables, subscribeToMenuItems } = await import('@/firebase/restaurant-service')
 
-        unsubscribeTables = subscribeToTables(restaurantName, (tableData) => {
+        // Tables subscription
+        unsubscribeRefs.current.tables = subscribeToTables(restaurantName, (tableData) => {
           setTables(tableData)
         })
 
-
-
-        unsubscribeMenu = subscribeToMenuItems(restaurantName, (menuData) => {
+        // Menu subscription
+        unsubscribeRefs.current.menu = subscribeToMenuItems(restaurantName, (menuData) => {
           setMenuItems(menuData)
         })
 
@@ -102,25 +92,61 @@ export default function Dashboard() {
 
     initializeRestaurant()
 
+    // Cleanup function
     return () => {
-      unsubscribeOrders?.()
-      unsubscribeTables?.()
-      unsubscribeMenu?.()
+      Object.values(unsubscribeRefs.current).forEach(unsubscribe => {
+        if (unsubscribe) unsubscribe()
+      })
+      unsubscribeRefs.current = {}
     }
   }, [user?.email, restaurantName])
 
-  // Calculate statistics
-  const todayOrders = orders.filter(order => {
+  // Auto-occupy tables for pending orders (optimized)
+  useEffect(() => {
+    if (!restaurantName || pendingOrders.length === 0) return
+
+    const autoOccupyTables = async () => {
+      try {
+        const promises = pendingOrders.map(async (order) => {
+          const table = tables.find(t => t.tableNumber === order.tableNumber)
+          if (table && !table.occupied) {
+            return updateTableStatus(restaurantName, order.tableNumber, true, order.id)
+          }
+        })
+        
+        await Promise.all(promises.filter(Boolean))
+      } catch (error) {
+        console.error('Error auto-occupying tables:', error)
+      }
+    }
+
+    autoOccupyTables()
+  }, [pendingOrders, tables, restaurantName])
+
+  // Memoized statistics calculation
+  const statistics = useCallback(() => {
     const today = new Date().toDateString()
-    return order.createdAt.toDateString() === today
-  })
+    const todayOrders = orders.filter(order => 
+      order.createdAt.toDateString() === today
+    )
+    
+    const occupiedTables = tables.filter(table => table.occupied)
+    
+    const todayRevenue = todayOrders.reduce((sum, order) => {
+      return order.status === 'served' ? sum + order.totalAmount : sum
+    }, 0)
 
-  const pendingOrders = orders.filter(order => order.status === 'pending')
-  const occupiedTables = tables.filter(table => table.occupied)
-  const unreadNotifications = notifications.filter(notification => !notification.isRead)
+    return {
+      todayOrders: todayOrders.length,
+      pendingOrders: pendingOrders.length,
+      occupiedTables: occupiedTables.length,
+      totalTables: tables.length,
+      todayRevenue,
+      menuItems: menuItems.length
+    }
+  }, [orders, tables, pendingOrders, menuItems])
 
-  const todayRevenue = todayOrders.reduce((total, order) => total + order.totalAmount, 0)
-
+  const stats = statistics()
 
   const handleOrderClick = (order: Order) => {
     setSelectedOrder(order)
@@ -129,10 +155,10 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading dashboard...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading dashboard...</p>
         </div>
       </div>
     )
@@ -140,13 +166,23 @@ export default function Dashboard() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <AlertCircle className="h-12 w-12 text-red-500 mx-auto" />
-          <p className="mt-4 text-red-600">{error}</p>
-          <Button onClick={() => window.location.reload()} className="mt-4">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <p className="text-red-600 mb-4">{error}</p>
+          <Button onClick={() => window.location.reload()}>
             Retry
           </Button>
+        </div>
+      </div>
+    )
+  }
+
+  if (!restaurant) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <p className="text-gray-600">Setting up restaurant...</p>
         </div>
       </div>
     )
@@ -155,22 +191,19 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Welcome back! Here's what's happening at your restaurant today.
-          </p>
+          <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
+          <p className="text-gray-600">Welcome back! Here's what's happening at your restaurant.</p>
         </div>
-        <div className="flex items-center space-x-2 mt-4 md:mt-0">
-          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-            <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
-            Live Data
+        {stats.pendingOrders > 0 && (
+          <Badge variant="destructive" className="animate-pulse">
+            {stats.pendingOrders} Pending Orders
           </Badge>
-        </div>
+        )}
       </div>
 
-      {/* Statistics Cards */}
+      {/* Key Metrics */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -178,23 +211,19 @@ export default function Dashboard() {
             <ShoppingCart className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{todayOrders.length}</div>
-            <p className="text-xs text-muted-foreground">
-              {pendingOrders.length} pending
-            </p>
+            <div className="text-2xl font-bold">{stats.todayOrders}</div>
+            <p className="text-xs text-muted-foreground">Total orders placed today</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Pending Orders</CardTitle>
+            <Clock className="h-4 w-4 text-orange-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">₹{todayRevenue.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">
-              From {todayOrders.length} orders today
-            </p>
+            <div className="text-2xl font-bold text-orange-600">{stats.pendingOrders}</div>
+            <p className="text-xs text-muted-foreground">Awaiting preparation</p>
           </CardContent>
         </Card>
 
@@ -205,29 +234,67 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {occupiedTables.length}/{tables.length}
+              {stats.occupiedTables}/{stats.totalTables}
             </div>
             <p className="text-xs text-muted-foreground">
-              {((occupiedTables.length / tables.length) * 100).toFixed(0)}% occupied
+              {stats.totalTables > 0 ? Math.round((stats.occupiedTables / stats.totalTables) * 100) : 0}% occupied
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Menu Items</CardTitle>
-            <ChefHat className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Today's Revenue</CardTitle>
+            <DollarSign className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{menuItems.length}</div>
-            <p className="text-xs text-muted-foreground">
-              {menuItems.filter(item => item.available).length} available
-            </p>
+            <div className="text-2xl font-bold text-green-600">₹{stats.todayRevenue.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">From completed orders</p>
           </CardContent>
         </Card>
       </div>
 
+      {/* Recent Activity */}
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5" />
+              Recent Notifications
+            </CardTitle>
+            <CardDescription>Latest activity and alerts</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <NotificationList />
+          </CardContent>
+        </Card>
 
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5" />
+              Quick Stats
+            </CardTitle>
+            <CardDescription>Your restaurant at a glance</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600">Menu Items</span>
+              <Badge variant="outline">{stats.menuItems}</Badge>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600">Total Tables</span>
+              <Badge variant="outline">{stats.totalTables}</Badge>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600">Restaurant Status</span>
+              <Badge variant={restaurant.status === 'active' ? 'default' : 'secondary'}>
+                {restaurant.status.toUpperCase()}
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Recent Orders and Quick Actions */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
@@ -338,48 +405,6 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Active Notifications */}
-      {unreadNotifications.length > 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <AlertCircle className="h-5 w-5 text-orange-500" />
-              <span>Active Notifications</span>
-              <Badge variant="destructive">{unreadNotifications.length}</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {unreadNotifications.slice(0, 3).map((notification) => (
-                <div key={notification.id} className="flex items-start space-x-3 p-3 bg-orange-50 rounded-lg">
-                  <div className="flex-1">
-                    <h4 className="font-medium text-orange-900">{notification.title}</h4>
-                    <p className="text-sm text-orange-700">{notification.message}</p>
-                    <p className="text-xs text-orange-600 mt-1">
-                      {notification.createdAt.toLocaleTimeString()}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center py-8">
-              <div className="mx-auto w-16 h-16 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center mb-4">
-                <AlertCircle className="h-8 w-8 text-blue-600" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Notifications</h3>
-              <p className="text-gray-600 text-sm">
-                You'll see order updates and alerts here when customers place orders 🔔
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Order Details Dialog */}
       <OrderDetailsDialog
