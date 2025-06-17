@@ -9,23 +9,23 @@ import {
 // Initialize the "BY_THE_WAY" restaurant
 export async function initializeByTheWayRestaurant() {
   try {
-    console.log('Initializing BY_THE_WAY restaurant...')
+     
     
     // Create the restaurant
     const restaurant = await createRestaurant('BY_THE_WAY', 'admin@bytheway.com')
-    console.log('Restaurant created with ID:', restaurant.id)
+   
 
     // Add sample menu items
     for (const menuItem of sampleMenuItems) {
       try {
         await addMenuItem('BY_THE_WAY', menuItem)
-        console.log(`Added menu item: ${menuItem.name}`)
+       
       } catch (error) {
         console.error(`Failed to add menu item ${menuItem.name}:`, error)
       }
     }
 
-    console.log('Sample data initialized')
+   
     return restaurant
   } catch (error) {
     console.error('Error initializing restaurant:', error)
@@ -89,9 +89,7 @@ export const sampleMenuItems: Omit<MenuItem, 'id' | 'createdAt' | 'updatedAt'>[]
 export async function runInitialization() {
   try {
     const restaurant = await initializeByTheWayRestaurant()
-    console.log('✅ BY_THE_WAY restaurant initialized successfully!')
-    console.log('🆔 Restaurant ID:', restaurant.id)
-    console.log('📝 You can now use this restaurant ID in your admin dashboard')
+   
     return restaurant
   } catch (error) {
     console.error('❌ Initialization failed:', error)

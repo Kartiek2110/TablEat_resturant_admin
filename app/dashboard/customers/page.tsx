@@ -38,7 +38,6 @@ export default function CustomersPage() {
     if (!restaurantName) return
 
     const unsubscribe = subscribeToCustomers(restaurantName, (customerData) => {
-      console.log('Customers updated:', customerData)
       setCustomers(customerData)
       setLoading(false)
     })

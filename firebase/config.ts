@@ -8,11 +8,6 @@ import { getFirestore } from 'firebase/firestore'
 import { getAnalytics, isSupported } from 'firebase/analytics'
 
 // Debug environment variables
-console.log('🔍 Environment variables debug:')
-console.log('NODE_ENV:', process.env.NODE_ENV)
-console.log('API_KEY exists:', !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY)
-console.log('AUTH_DOMAIN exists:', !!process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN)
-console.log('PROJECT_ID exists:', !!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID)
 
 // Firebase configuration
 const firebaseConfig = {

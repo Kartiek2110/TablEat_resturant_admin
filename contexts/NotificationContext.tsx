@@ -159,7 +159,7 @@ class AudioManager {
     try {
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
     } catch (e) {
-      console.log('Web Audio not supported')
+     
     }
 
     // Initialize HTML Audio Element
@@ -171,7 +171,7 @@ class AudioManager {
       // Test load
              this.audioElement.load()
     } catch (e) {
-      console.log('Audio file not available')
+     
     }
 
     // Enable audio on first user interaction
@@ -218,7 +218,7 @@ class AudioManager {
         oscillator.stop(currentTime + i * 0.3 + 0.2)
       }
     } catch (error) {
-      console.log('Beep creation failed:', error)
+     
     }
   }
 
@@ -232,7 +232,7 @@ class AudioManager {
         await this.audioElement.play()
         return
       } catch (error) {
-        console.log('HTML Audio failed:', error)
+       
       }
     }
 
@@ -270,10 +270,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (!restaurantName) return
 
-    console.log('🔔 Setting up notification subscription for:', restaurantName)
+
 
     const unsubscribe = subscribeToNotifications(restaurantName, (newNotifications) => {
-      console.log('🔔 Received notifications:', newNotifications.length)
+     
       
       if (isInitialLoad.current) {
         setNotifications(newNotifications)
@@ -286,11 +286,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       const newNotificationsList = newNotifications.filter(n => !previousNotificationIds.has(n.id))
       
       if (newNotificationsList.length > 0) {
-        console.log('🔔 New notifications detected:', newNotificationsList.length)
+       
         
         newNotificationsList.forEach(notification => {
           if (notification.type === 'new_order') {
-            console.log('🚨 NEW ORDER notification detected!')
+           
             
             // Find corresponding order
             const correspondingOrder = orders.find(o => o.id === notification.orderId)
@@ -328,10 +328,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (!restaurantName) return
 
-    console.log('📋 Setting up order subscription for:', restaurantName)
+
 
     const unsubscribe = subscribeToOrders(restaurantName, (newOrders) => {
-      console.log('📋 Received orders:', newOrders.length)
+     
       
       if (isInitialOrderLoad.current) {
         setOrders(newOrders)
@@ -344,11 +344,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       const newOrdersList = newOrders.filter(o => !previousOrderIds.has(o.id))
       
       if (newOrdersList.length > 0) {
-        console.log('🚨 NEW ORDERS detected:', newOrdersList.length)
+       
         
         newOrdersList.forEach(order => {
           if (order.status === 'pending') {
-            console.log('🚨 New pending order:', order.id, 'Table:', order.tableNumber)
+           
             
             setLastOrderTime(new Date())
             
@@ -402,7 +402,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     try {
       await markNotificationAsRead(restaurantName, notificationId)
     } catch (error) {
-      console.error('Error marking notification as read:', error)
+     
     }
   }
 

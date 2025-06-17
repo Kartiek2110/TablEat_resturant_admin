@@ -1,1 +1,2 @@
- 
+# Notification Sound Placeholder
+# The actual notification sound will be generated using Web Audio API 

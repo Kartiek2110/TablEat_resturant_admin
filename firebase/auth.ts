@@ -58,7 +58,7 @@ export async function createAdminAccount(email: string, password: string): Promi
       role: 'admin'
     })
 
-    console.log('Admin account created successfully:', { email, restaurantName })
+   
     return { success: true }
   } catch (error: any) {
     console.error('Firebase Create Account Error:', error)
@@ -93,7 +93,7 @@ export async function firebaseSignIn(email: string, password: string): Promise<{
     const userCredential = await signInWithEmailAndPassword(auth, email, password)
     const user = userCredential.user
     
-    console.log('Firebase sign-in successful:', user.email)
+    
     return { success: true }
   } catch (error: any) {
     console.error('Firebase Sign-in Error:', error)
@@ -123,7 +123,7 @@ export async function firebaseSignOut(): Promise<void> {
   try {
     checkFirebaseInit()
     await signOut(auth)
-    console.log('User signed out successfully')
+   
   } catch (error) {
     console.error('Sign out error:', error)
     throw error

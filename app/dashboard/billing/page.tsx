@@ -6,7 +6,6 @@ import { Receipt, CreditCard, TrendingUp } from 'lucide-react'
 
 export default function BillingPage() {
   const handleBillGenerated = (bill: any) => {
-    console.log('Bill generated:', bill)
     // Here you could save the bill to Firebase or perform other actions
   }
 

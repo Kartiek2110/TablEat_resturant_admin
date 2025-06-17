@@ -33,14 +33,5 @@ const testOrder = {
 // 4. Generate notification for the restaurant admin
 // 5. Update analytics data
 
-console.log('Test Order Structure:', JSON.stringify(testOrder, null, 2))
-console.log('\nThis order will:')
-console.log('✅ Create order with status "pending"')
-console.log('✅ Auto-occupy Table 1')
-console.log('✅ Save customer "kartik" with phone "7011498995"')
-console.log('✅ Generate notification for restaurant admin')
-console.log('✅ Update analytics with ₹213.84 revenue')
-console.log('✅ Track favorite items: cheeze_burger, cheeze_pizza')
-
 // To test this in your app, you can call:
 // await processIncomingOrder("BY_THE_WAY", testOrder) 

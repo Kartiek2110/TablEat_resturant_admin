@@ -89,7 +89,6 @@ export default function Dashboard() {
 
 
         unsubscribeMenu = subscribeToMenuItems(restaurantName, (menuData) => {
-          console.log('Menu updated:', menuData)
           setMenuItems(menuData)
         })
 

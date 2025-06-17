@@ -125,19 +125,19 @@ export default function TablesPage() {
   const availableTables = tables.filter(table => !table.occupied)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 p-3 sm:p-0">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Table Management</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Table Management</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
             Manage your restaurant tables and track occupancy
           </p>
         </div>
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
+            <Button className="w-full sm:w-auto text-sm">
+              <Plus className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
               Add Table
             </Button>
           </DialogTrigger>
@@ -188,14 +188,14 @@ export default function TablesPage() {
       </div>
 
       {/* Statistics */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Tables</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-xs sm:text-sm font-medium">Total Tables</CardTitle>
+            <Users className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{tables.length}</div>
+            <div className="text-lg sm:text-2xl font-bold">{tables.length}</div>
           </CardContent>
         </Card>
         

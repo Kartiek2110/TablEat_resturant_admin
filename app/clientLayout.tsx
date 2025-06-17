@@ -59,13 +59,13 @@ function NavigationHeader() {
   }, [pendingOrders.length, lastOrderTime])
 
   return (
-    <header className="flex h-16 lg:h-[60px] items-center justify-between gap-4 border-b bg-white shadow-sm px-6">
-      <div className="flex items-center gap-4">
+    <header className="flex h-16 lg:h-[60px] items-center justify-between gap-2 sm:gap-4 border-b bg-white shadow-sm px-3 sm:px-6">
+      <div className="flex items-center gap-2 sm:gap-4">
         <SidebarTrigger className="lg:hidden" />
-        <div className="flex items-center gap-3">
-          <Crown className="h-6 w-6 text-blue-600" />
-          <div>
-            <h1 className="font-bold text-lg md:text-xl text-gray-900">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <Crown className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
+          <div className="min-w-0">
+            <h1 className="font-bold text-sm sm:text-lg md:text-xl text-gray-900 truncate">
               {restaurantName ? restaurantName.replace(/_/g, ' ') : 'Restaurant'} Admin
             </h1>
             <p className="text-xs text-gray-500 hidden md:block">Management Dashboard</p>
@@ -73,25 +73,26 @@ function NavigationHeader() {
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-1 sm:gap-2 lg:gap-4 overflow-x-auto">
         {/* URGENT: Pending Orders Alert */}
         {pendingOrdersAlert && (
-          <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border-2 border-red-500 rounded-lg animate-pulse">
-            <AlertTriangle className="h-5 w-5 text-red-600" />
-            <div className="text-sm">
-              <div className="font-bold text-red-800">
-                {pendingOrdersAlert.count} URGENT ORDER{pendingOrdersAlert.count > 1 ? 'S' : ''}!
+          <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-2 bg-red-50 border-2 border-red-500 rounded-lg animate-pulse min-w-0 flex-shrink-0">
+            <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-red-600 flex-shrink-0" />
+            <div className="text-xs sm:text-sm min-w-0">
+              <div className="font-bold text-red-800 truncate">
+                {pendingOrdersAlert.count} ORDER{pendingOrdersAlert.count > 1 ? 'S' : ''}!
               </div>
-              <div className="text-red-600 text-xs">
+              <div className="text-red-600 text-xs hidden sm:block">
                 {pendingOrdersAlert.latestTime && `Latest: ${pendingOrdersAlert.latestTime}`}
               </div>
             </div>
             <Button
               size="sm"
-              className="bg-red-600 hover:bg-red-700 text-white ml-2"
+              className="bg-red-600 hover:bg-red-700 text-white text-xs px-2 py-1 h-6 sm:h-8 sm:px-3 sm:py-2 flex-shrink-0"
               onClick={() => window.location.href = '/dashboard/orders'}
             >
-              VIEW NOW
+              <span className="hidden sm:inline">VIEW NOW</span>
+              <span className="sm:hidden">VIEW</span>
             </Button>
           </div>
         )}
@@ -100,7 +101,7 @@ function NavigationHeader() {
         {subscriptionStatus && (
           <Badge 
             variant={subscriptionStatus.isValid ? "secondary" : "destructive"}
-            className={`${
+            className={`hidden sm:flex text-xs ${
               subscriptionStatus.isValid 
                 ? subscriptionStatus.daysRemaining > 7
                   ? 'bg-green-50 text-green-700 border-green-200'
@@ -114,13 +115,15 @@ function NavigationHeader() {
         )}
 
         {/* Restaurant Status Control */}
-        <RestaurantStatusControl />
+        <div className="hidden sm:block">
+          <RestaurantStatusControl />
+        </div>
 
         {/* Notifications */}
         <NotificationDropdown />
 
         {/* TablEat Brand */}
-        <div className="flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-full border border-blue-200">
+        <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-full border border-blue-200">
           <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
           <span className="text-sm font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
             TablEat
@@ -128,8 +131,8 @@ function NavigationHeader() {
         </div>
 
         {/* User Info & Logout */}
-        <div className="flex items-center gap-3">
-          <div className="hidden md:flex items-center gap-2 text-sm">
+        <div className="flex items-center gap-1 sm:gap-3">
+          <div className="hidden lg:flex items-center gap-2 text-sm">
             <User className="h-4 w-4 text-gray-500" />
             <span className="text-gray-700">{user?.email?.split('@')[0]}</span>
           </div>
@@ -137,10 +140,10 @@ function NavigationHeader() {
             variant="outline"
             size="sm"
             onClick={handleLogout}
-            className="flex items-center gap-2 hover:bg-red-50 hover:border-red-200 hover:text-red-600"
+            className="flex items-center gap-1 sm:gap-2 hover:bg-red-50 hover:border-red-200 hover:text-red-600 px-2 sm:px-3"
           >
-            <LogOut className="h-4 w-4" />
-            <span className="hidden md:inline">Logout</span>
+            <LogOut className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">Logout</span>
           </Button>
         </div>
       </div>

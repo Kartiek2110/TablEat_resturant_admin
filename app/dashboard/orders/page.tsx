@@ -162,11 +162,11 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 p-3 sm:p-0">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Order Management</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Order Management</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">
           Track and manage all your restaurant orders in real-time
         </p>
       </div>
@@ -228,14 +228,14 @@ export default function OrdersPage() {
       )}
 
       {/* Statistics Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-xs sm:text-sm font-medium">Total Orders</CardTitle>
+            <ShoppingCart className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{orders.length}</div>
+            <div className="text-lg sm:text-2xl font-bold">{orders.length}</div>
             <p className="text-xs text-muted-foreground">
               {todayOrders.length} today
             </p>
@@ -244,37 +244,37 @@ export default function OrdersPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-xs sm:text-sm font-medium">Revenue</CardTitle>
+            <DollarSign className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">₹{totalRevenue.toFixed(2)}</div>
+            <div className="text-lg sm:text-2xl font-bold">₹{totalRevenue.toFixed(0)}</div>
             <p className="text-xs text-muted-foreground">
-              From completed orders
+              Completed orders
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg Order Value</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-xs sm:text-sm font-medium">Avg Value</CardTitle>
+            <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">₹{averageOrderValue.toFixed(2)}</div>
+            <div className="text-lg sm:text-2xl font-bold">₹{averageOrderValue.toFixed(0)}</div>
             <p className="text-xs text-muted-foreground">
-              Per order average
+              Per order
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Orders</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-xs sm:text-sm font-medium">Active</CardTitle>
+            <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-lg sm:text-2xl font-bold">
               {orders.filter(order => ['pending', 'preparing', 'ready'].includes(order.status)).length}
             </div>
             <p className="text-xs text-muted-foreground">
@@ -287,23 +287,25 @@ export default function OrdersPage() {
       {/* Orders Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Order History</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-lg sm:text-xl">Order History</CardTitle>
+          <CardDescription className="text-sm">
             Complete history of all orders placed at your restaurant
           </CardDescription>
         </CardHeader>
         <CardContent>
           {/* Search */}
-          <div className="flex items-center space-x-2 mb-6">
-            <Search className="h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Search by customer name, phone, order ID, table, or status..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="max-w-md"
-            />
+          <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 mb-4 sm:mb-6">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Search orders..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 text-sm"
+              />
+            </div>
             {searchTerm && (
-              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs">
                 {filteredOrders.length} result{filteredOrders.length !== 1 ? 's' : ''}
               </Badge>
             )}
@@ -334,20 +336,21 @@ export default function OrdersPage() {
                 </p>
               </div>
             ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Order ID</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Table</TableHead>
-                  <TableHead>Items</TableHead>
-                  <TableHead>Total</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Timing</TableHead>
-                  <TableHead>Date</TableHead>
-                </TableRow>
-              </TableHeader>
-                              <TableBody>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs sm:text-sm">Order ID</TableHead>
+                    <TableHead className="text-xs sm:text-sm">Customer</TableHead>
+                    <TableHead className="text-xs sm:text-sm">Table</TableHead>
+                    <TableHead className="text-xs sm:text-sm">Items</TableHead>
+                    <TableHead className="text-xs sm:text-sm">Total</TableHead>
+                    <TableHead className="text-xs sm:text-sm">Status</TableHead>
+                    <TableHead className="text-xs sm:text-sm">Timing</TableHead>
+                    <TableHead className="text-xs sm:text-sm">Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {filteredOrders.map((order) => {
                     const getOrderTiming = () => {
                       const now = new Date()
@@ -382,21 +385,21 @@ export default function OrdersPage() {
                         className="cursor-pointer hover:bg-gray-50 transition-colors"
                         onClick={() => handleOrderClick(order)}
                       >
-                        <TableCell className="font-medium">
+                        <TableCell className="font-medium text-xs sm:text-sm">
                           #{order.id.slice(-6).toUpperCase()}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-xs sm:text-sm">
                           <div>
                             <p className="font-medium">{order.customerName}</p>
                             {order.customerPhone && (
-                              <p className="text-sm text-gray-500">{order.customerPhone}</p>
+                              <p className="text-xs text-gray-500">{order.customerPhone}</p>
                             )}
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">Table {order.tableNumber}</Badge>
+                        <TableCell className="text-xs sm:text-sm">
+                          <Badge variant="outline" className="text-xs">Table {order.tableNumber}</Badge>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-xs sm:text-sm">
                           <div className="space-y-1">
                             {order.items.slice(0, 2).map((item, index) => (
                               <div key={index} className="text-sm">

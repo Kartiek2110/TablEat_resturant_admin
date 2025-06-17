@@ -235,7 +235,7 @@ export async function createRestaurant(name: string, adminEmail: string): Promis
 
     // Tables will be added by admin through the table management page
 
-    console.log('Restaurant created successfully:', restaurantId)
+   
     return { id: restaurantId, ...restaurantData }
   } catch (error) {
     console.error('Error creating restaurant:', error)
@@ -754,7 +754,7 @@ export async function processIncomingOrder(restaurantName: string, orderData: {
       })
     }
 
-    console.log('Order processed successfully:', createdOrder.id)
+   
   } catch (error) {
     console.error('Error processing incoming order:', error)
     throw new Error('Failed to process order')
@@ -959,7 +959,7 @@ export async function renewSubscription(restaurantName: string, months: number =
       updatedAt: serverTimestamp()
     })
     
-    console.log('Subscription renewed successfully')
+    
   } catch (error) {
     console.error('Error renewing subscription:', error)
     throw new Error('Failed to renew subscription')
@@ -984,7 +984,7 @@ export async function addInventoryItem(restaurantName: string, item: Omit<Invent
       updatedAt: new Date()
     }
 
-    console.log('Inventory item added successfully:', docRef.id)
+   
     return newItem
   } catch (error) {
     console.error('Error adding inventory item:', error)
@@ -999,7 +999,7 @@ export async function updateInventoryItem(restaurantName: string, itemId: string
       ...updates,
       updatedAt: serverTimestamp()
     })
-    console.log('Inventory item updated successfully')
+   
   } catch (error) {
     console.error('Error updating inventory item:', error)
     throw new Error('Failed to update inventory item')
@@ -1010,7 +1010,7 @@ export async function deleteInventoryItem(restaurantName: string, itemId: string
   try {
     const restaurantId = getRestaurantCollectionName(restaurantName)
     await deleteDoc(doc(db, 'restaurants', restaurantId, 'inventory', itemId))
-    console.log('Inventory item deleted successfully')
+   
   } catch (error) {
     console.error('Error deleting inventory item:', error)
     throw new Error('Failed to delete inventory item')
@@ -1039,8 +1039,7 @@ export async function updateMenuItemIngredients(restaurantName: string, menuItem
   try {
     const restaurantId = getRestaurantCollectionName(restaurantName)
     const docPath = `restaurants/${restaurantId}/menu/${menuItemId}`
-    console.log('Updating menu item ingredients at path:', docPath)
-    console.log('Ingredients to update:', ingredients)
+   
     
     // First check if the document exists
     const docRef = doc(db, 'restaurants', restaurantId, 'menu', menuItemId)
@@ -1055,7 +1054,7 @@ export async function updateMenuItemIngredients(restaurantName: string, menuItem
       ingredients,
       updatedAt: serverTimestamp()
     })
-    console.log('Menu item ingredients updated successfully')
+   
   } catch (error) {
     console.error('Error updating menu item ingredients:', error)
     throw new Error('Failed to update menu item ingredients')
@@ -1125,7 +1124,7 @@ export async function processOrderInventoryUpdate(restaurantName: string, orderI
     }
 
     await batch.commit()
-    console.log('Inventory updated for order:', orderId)
+   
   } catch (error) {
     console.error('Error updating inventory for order:', error)
     throw new Error('Failed to update inventory for order')
@@ -1141,7 +1140,7 @@ export async function setStaffManagementCode(restaurantName: string, code: strin
       staff_management_code: code,
       updatedAt: serverTimestamp()
     })
-    console.log('Staff management code updated successfully')
+   
   } catch (error) {
     console.error('Error updating staff management code:', error)
     throw new Error('Failed to update staff management code')
@@ -1174,7 +1173,7 @@ export async function addStaffMember(restaurantName: string, staff: Omit<StaffMe
       updatedAt: new Date()
     }
 
-    console.log('Staff member added successfully:', docRef.id)
+   
     return newStaff
   } catch (error) {
     console.error('Error adding staff member:', error)
@@ -1189,7 +1188,7 @@ export async function updateStaffMember(restaurantName: string, staffId: string,
       ...updates,
       updatedAt: serverTimestamp()
     })
-    console.log('Staff member updated successfully')
+   
   } catch (error) {
     console.error('Error updating staff member:', error)
     throw new Error('Failed to update staff member')
@@ -1248,7 +1247,7 @@ export async function markAttendance(restaurantName: string, attendance: Omit<At
       })
     }
     
-    console.log('Attendance marked successfully')
+   
   } catch (error) {
     console.error('Error marking attendance:', error)
     throw new Error('Failed to mark attendance')

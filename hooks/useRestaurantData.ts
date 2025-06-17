@@ -45,7 +45,7 @@ export const useRestaurant = (restaurantName: string) => {
       if (!restaurantName) return
       try {
         // Note: You would need to implement updateRestaurant in firebase service
-        console.log('Update restaurant not implemented yet', updates)
+       
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to update restaurant')
       }
@@ -146,7 +146,7 @@ export const useTables = (restaurantName: string) => {
     async (table: { tableNumber: number; capacity: number }) => {
       try {
         // Note: You would need to implement addTable in firebase service
-        console.log('Add table not implemented yet', table)
+       
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to add table')
       }
@@ -165,7 +165,7 @@ export const useTables = (restaurantName: string) => {
   const deleteTable = useCallback(async (tableId: string) => {
     try {
       // Note: You would need to implement deleteTable in firebase service
-      console.log('Delete table not implemented yet', tableId)
+     
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete table')
     }
@@ -191,7 +191,7 @@ export const useDiscounts = (restaurantName: string) => {
     async (discount: Omit<Discount, 'id' | 'createdAt' | 'updatedAt'>) => {
       try {
         // Note: You would need to implement discount management in firebase service
-        console.log('Add discount not implemented yet', discount)
+       
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to add discount')
       }
@@ -202,7 +202,7 @@ export const useDiscounts = (restaurantName: string) => {
   const updateDiscount = useCallback(async (discountId: string, updates: Partial<Discount>) => {
     try {
       // Note: You would need to implement discount management in firebase service
-      console.log('Update discount not implemented yet', discountId, updates)
+     
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update discount')
     }
@@ -211,7 +211,7 @@ export const useDiscounts = (restaurantName: string) => {
   const deleteDiscount = useCallback(async (discountId: string) => {
     try {
       // Note: You would need to implement discount management in firebase service
-      console.log('Delete discount not implemented yet', discountId)
+     
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete discount')
     }
@@ -238,7 +238,7 @@ export const useRestaurantManagement = (restaurantName: string) => {
     async (restaurantInfo: Omit<RestaurantType, 'id' | 'createdAt' | 'updatedAt'>) => {
       try {
         // Note: You would need to implement restaurant initialization
-        console.log('Initialize restaurant not implemented yet', restaurantInfo)
+       
         throw new Error('Restaurant initialization not implemented')
       } catch (err) {
         throw new Error(err instanceof Error ? err.message : 'Failed to initialize restaurant')
