@@ -72,7 +72,7 @@ if (hasFirebaseConfig) {
       })
     }
     
-    console.log('✅ Firebase initialized successfully')
+    console.log('✅ Firebase initialized successfully and config is working')
   } catch (error) {
     console.error('❌ Failed to initialize Firebase:', error)
   }
