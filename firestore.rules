@@ -1,0 +1,73 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow public read access to restaurants collection for customer-facing pages
+    match /restaurants/{restaurantId} {
+      allow read: if true; // Allow public read access for customers
+      allow write: if request.auth != null; // Restrict write access to authenticated users
+      
+      // Allow public read access to menu items - THIS SHOULD ALWAYS WORK
+      match /menu/{menuItemId} {
+        allow read: if true;
+        allow write: if request.auth != null;
+      }
+      
+      // Allow public read access to restaurant details
+      match /rest_details/{detailId} {
+        allow read: if true;
+        allow write: if request.auth != null;
+      }
+      
+      // Allow read access to tables (for checking availability)
+      match /tables/{tableId} {
+        allow read: if true;
+        allow write: if request.auth != null;
+      }
+      
+      // Allow customers to read their orders and create new ones
+      match /orders/{orderId} {
+        allow read: if true;
+        allow create: if true; // Allow customers to place orders
+        allow update, delete: if request.auth != null; // Only authenticated users can update/delete
+      }
+      
+      // Allow read access to notifications (admin only)
+      match /notifications/{notificationId} {
+        allow read: if request.auth != null; // Only authenticated users should see notifications
+        allow write: if request.auth != null;
+      }
+      
+      // Allow customers to save their info
+      match /customers/{customerId} {
+        allow read: if true;
+        allow write: if true; // Allow customers to save their info
+      }
+
+      // NEW: Inventory Management (Admin only - requires approval)
+      match /inventory/{inventoryId} {
+        allow read, write: if request.auth != null;
+      }
+      
+      // NEW: Stock Transactions (Admin only)
+      match /stock_transactions/{transactionId} {
+        allow read, write: if request.auth != null;
+      }
+      
+      // NEW: Staff Management (Admin only - requires approval)
+      match /staff/{staffId} {
+        allow read, write: if request.auth != null;
+      }
+      
+      // NEW: Attendance Records (Admin only)
+      match /attendance/{attendanceId} {
+        allow read, write: if request.auth != null;
+      }
+    }
+    
+    // Allow access to admin profiles
+    match /admins/{adminId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+} 
