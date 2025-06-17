@@ -107,6 +107,7 @@ function NewOrderPopup({
         const elapsed = Math.floor((Date.now() - order.createdAt.getTime()) / 1000)
         setTimeElapsed(elapsed)
       }, 1000)
+      console.log(order)
     }
 
     // Auto close after 10 seconds
