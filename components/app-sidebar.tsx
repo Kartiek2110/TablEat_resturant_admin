@@ -115,16 +115,31 @@ export function AppSidebar() {
   const memoizedNavItems = useMemo(() => {
     return navItems.filter(item => {
       // Always show these items
-      if (item.title !== "Inventory" && item.title !== "Staff Management") {
+      if (!["Quick Order", "Analytics", "Customers", "Inventory", "Staff Management"].includes(item.title)) {
         return true
       }
       
-      // Only show Inventory if approved
+      // Show Quick Order only if approved
+      if (item.title === "Quick Order") {
+        return restaurant?.quick_order_approved === true
+      }
+      
+      // Show Analytics only if approved
+      if (item.title === "Analytics") {
+        return restaurant?.analytics_approved === true
+      }
+      
+      // Show Customers only if approved
+      if (item.title === "Customers") {
+        return restaurant?.customer_approved === true
+      }
+      
+      // Show Inventory only if approved
       if (item.title === "Inventory") {
         return restaurant?.inventory_management_approved === true
       }
       
-      // Only show Staff Management if approved
+      // Show Staff Management only if approved
       if (item.title === "Staff Management") {
         return restaurant?.staff_management_approved === true
       }

@@ -137,8 +137,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     <AuthProvider>
       <NotificationProvider>
         <ProtectedLayout>{children}</ProtectedLayout>
-        <Toaster position="top-right" richColors />
       </NotificationProvider>
+      <Toaster position="top-right" richColors />
     </AuthProvider>
   )
 }

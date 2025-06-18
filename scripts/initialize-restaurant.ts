@@ -2,6 +2,7 @@
 import { 
   createRestaurant, 
   addMenuItem,
+  updateRestaurantStatus,
   type MenuItem,
   type Restaurant 
 } from '@/firebase/restaurant-service'
@@ -9,26 +10,64 @@ import {
 // Initialize the "BY_THE_WAY" restaurant
 export async function initializeByTheWayRestaurant() {
   try {
-     
+    console.log('🏪 Creating BY_THE_WAY restaurant with default permissions...')
     
-    // Create the restaurant
-    const restaurant = await createRestaurant('BY_THE_WAY', 'admin@bytheway.com')
-   
+    // Create the restaurant - now with all default permission fields
+    const restaurant = await createRestaurant('BY_THE_WAY', 'by_the_way_admin@gmail.com')
+    console.log('✅ Restaurant created successfully:', restaurant.name)
+    console.log('📋 Default Permissions Set:')
+    console.log('  • Quick Order: ❌ (Requires Admin Approval)')
+    console.log('  • Analytics: ❌ (Requires Admin Approval)')
+    console.log('  • Customer Management: ✅ (Enabled)')
+    console.log('  • Inventory: ❌ (Requires Admin Approval)')
+    console.log('  • Staff Management: ❌ (Requires Admin Approval)')
+    console.log('  • Restaurant Status: 🟢 (Open)')
 
     // Add sample menu items
+    console.log('🍽️ Adding sample menu items...')
     for (const menuItem of sampleMenuItems) {
       try {
         await addMenuItem('BY_THE_WAY', menuItem)
-       
+        console.log(`  ✅ Added: ${menuItem.name}`)
       } catch (error) {
-        console.error(`Failed to add menu item ${menuItem.name}:`, error)
+        console.error(`  ❌ Failed to add menu item ${menuItem.name}:`, error)
       }
     }
 
-   
+    console.log('🎉 Restaurant initialization completed successfully!')
     return restaurant
   } catch (error) {
-    console.error('Error initializing restaurant:', error)
+    console.error('❌ Error initializing restaurant:', error)
+    throw error
+  }
+}
+
+// Function to update existing restaurant with missing permission fields
+export async function updateExistingRestaurantPermissions() {
+  try {
+    console.log('🔧 Updating existing BY_THE_WAY restaurant with missing permission fields...')
+    
+    // Update the restaurant document with missing fields
+    await updateRestaurantStatus('BY_THE_WAY', {
+      quick_order_approved: false,        // Initially false
+      analytics_approved: false,          // Initially false  
+      customer_approved: true,            // Initially true
+      inventory_management_approved: false, // Set to false as requested
+      staff_management_approved: false     // Set to false as requested
+    })
+    
+    console.log('✅ Restaurant permissions updated successfully!')
+    console.log('📋 Updated Permissions:')
+    console.log('  • Quick Order: ❌ (false)')
+    console.log('  • Analytics: ❌ (false)')
+    console.log('  • Customer Management: ✅ (true)')
+    console.log('  • Inventory: ❌ (false)')
+    console.log('  • Staff Management: ❌ (false)')
+    console.log('  • Restaurant Status: 🟢 (remains open)')
+    
+    return true
+  } catch (error) {
+    console.error('❌ Error updating restaurant permissions:', error)
     throw error
   }
 }

@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Plus, Edit2, Trash2, Users, Clock, Shield, Eye, EyeOff, UserCheck, UserX, Calendar } from "lucide-react"
+import { Plus, Edit2, Trash2, Users, Clock, Shield, Eye, EyeOff, UserCheck, UserX, Calendar, Download, FileText } from "lucide-react"
 import { 
   verifyStaffManagementCode,
   subscribeToStaffMembers,
@@ -27,6 +27,7 @@ import {
   type Restaurant
 } from '@/firebase/restaurant-service'
 import { toast } from "sonner"
+import * as XLSX from 'xlsx'
 
 export default function StaffManagement() {
   const { restaurantName, user } = useAuth()
@@ -43,6 +44,7 @@ export default function StaffManagement() {
   const [isAttendanceDialogOpen, setIsAttendanceDialogOpen] = useState(false)
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null)
   const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0])
+  const [exporting, setExporting] = useState(false)
   
   const [staffFormData, setStaffFormData] = useState({
     name: '',
@@ -273,6 +275,69 @@ export default function StaffManagement() {
     date.setDate(date.getDate() - i)
     return date
   }).reverse()
+
+  // Export attendance to Excel
+  const exportAttendanceToExcel = async () => {
+    if (attendanceRecords.length === 0) {
+      toast.error("No attendance data to export")
+      return
+    }
+
+    setExporting(true)
+    try {
+      // Prepare data for Excel
+      const excelData = attendanceRecords.map((record, index) => ({
+        'S.No': index + 1,
+        'Staff Name': record.staffName,
+        'Date': record.date.toLocaleDateString(),
+        'Status': record.status.charAt(0).toUpperCase() + record.status.slice(1),
+        'Check In': record.checkIn ? record.checkIn.toLocaleTimeString() : 'N/A',
+        'Check Out': record.checkOut ? record.checkOut.toLocaleTimeString() : 'N/A',
+        'Working Hours': record.checkIn && record.checkOut 
+          ? ((record.checkOut.getTime() - record.checkIn.getTime()) / (1000 * 60 * 60)).toFixed(2) 
+          : 'N/A',
+        'Notes': record.notes || 'None',
+        'Created At': record.createdAt.toLocaleDateString(),
+        'Created Time': record.createdAt.toLocaleTimeString(),
+      }))
+
+      // Create workbook and worksheet
+      const workbook = XLSX.utils.book_new()
+      const worksheet = XLSX.utils.json_to_sheet(excelData)
+
+      // Set column widths
+      const columnWidths = [
+        { wch: 8 },   // S.No
+        { wch: 20 },  // Staff Name
+        { wch: 12 },  // Date
+        { wch: 12 },  // Status
+        { wch: 12 },  // Check In
+        { wch: 12 },  // Check Out
+        { wch: 15 },  // Working Hours
+        { wch: 30 },  // Notes
+        { wch: 12 },  // Created At
+        { wch: 12 }   // Created Time
+      ]
+      worksheet['!cols'] = columnWidths
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Attendance')
+
+      // Generate filename with current date
+      const currentDate = new Date().toISOString().split('T')[0]
+      const filename = `attendance_${restaurantName}_${currentDate}.xlsx`
+
+      // Write and download file
+      XLSX.writeFile(workbook, filename)
+      
+      toast.success(`Attendance data exported successfully! (${attendanceRecords.length} records)`)
+    } catch (error) {
+      console.error('Error exporting to Excel:', error)
+      toast.error("Failed to export attendance data")
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const isStaffApproved = restaurant?.staff_management_approved === true
 
@@ -508,9 +573,20 @@ export default function StaffManagement() {
 
         <TabsContent value="attendance" className="space-y-4">
           <Card>
-            <CardHeader>
-              <CardTitle>Attendance Overview (Last 7 Days)</CardTitle>
-              <CardDescription>Track staff attendance and working hours</CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Attendance Overview (Last 7 Days)</CardTitle>
+                <CardDescription>Track staff attendance and working hours</CardDescription>
+              </div>
+              <Button
+                onClick={exportAttendanceToExcel}
+                disabled={exporting || attendanceRecords.length === 0}
+                className="bg-green-600 hover:bg-green-700 text-white"
+                size="sm"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                {exporting ? 'Exporting...' : 'Export to Excel'}
+              </Button>
             </CardHeader>
             <CardContent>
               {staffMembers.length > 0 ? (
@@ -544,15 +620,30 @@ export default function StaffManagement() {
                             return (
                               <TableCell key={`${staff.id}-${date.toDateString()}`}>
                                 {attendance ? (
-                                  <div>
+                                  <div className="space-y-1">
                                     {getStatusBadge(attendance.status)}
                                     {attendance.checkIn && (
-                                      <div className="text-xs text-gray-500 mt-1">
-                                        {attendance.checkIn.toLocaleTimeString('en-US', {
+                                      <div className="text-xs text-gray-500">
+                                        In: {attendance.checkIn.toLocaleTimeString('en-US', {
                                           hour: '2-digit',
                                           minute: '2-digit',
                                           hour12: true
                                         })}
+                                      </div>
+                                    )}
+                                    {attendance.checkOut && (
+                                      <div className="text-xs text-gray-500">
+                                        Out: {attendance.checkOut.toLocaleTimeString('en-US', {
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                          hour12: true
+                                        })}
+                                      </div>
+                                    )}
+                                    {attendance.notes && (
+                                      <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded max-w-24 truncate" title={attendance.notes}>
+                                        <FileText className="h-3 w-3 inline mr-1" />
+                                        {attendance.notes}
                                       </div>
                                     )}
                                   </div>

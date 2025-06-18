@@ -2,9 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { getRestaurantByAdminEmail } from '@/firebase/restaurant-service'
-import { db } from '@/firebase/config'
-import { updateDoc, doc } from 'firebase/firestore'
+import { getRestaurantByAdminEmail, updateRestaurantStatus } from '@/firebase/restaurant-service'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -23,6 +21,7 @@ interface Restaurant {
   id: string
   name: string
   status: 'active' | 'inactive'
+  restaurant_open: boolean
   adminEmail: string
 }
 
@@ -41,6 +40,7 @@ export default function RestaurantStatusControl() {
               id: restaurantData.id,
               name: restaurantData.name,
               status: restaurantData.status,
+              restaurant_open: restaurantData.restaurant_open ?? true,
               adminEmail: restaurantData.adminEmail
             })
           }
@@ -52,25 +52,21 @@ export default function RestaurantStatusControl() {
     fetchRestaurant()
   }, [user?.email])
 
-  const updateRestaurantStatus = async (newStatus: 'active' | 'inactive') => {
+  const updateRestaurantOpenStatus = async (isOpen: boolean) => {
     if (!restaurant || !restaurantName) return
 
     setLoading(true)
     try {
-      const restaurantId = restaurantName.replace(/[^a-zA-Z0-9_]/g, '').toUpperCase()
-      const restaurantRef = doc(db, 'restaurants', restaurantId)
-      
-      await updateDoc(restaurantRef, {
-        status: newStatus,
-        updatedAt: new Date()
+      await updateRestaurantStatus(restaurantName, {
+        restaurant_open: isOpen
       })
 
-      setRestaurant(prev => prev ? { ...prev, status: newStatus } : null)
+      setRestaurant(prev => prev ? { ...prev, restaurant_open: isOpen } : null)
       
       toast.success(
-        `Restaurant ${newStatus === 'active' ? 'activated' : 'deactivated'}`,
+        `Restaurant ${isOpen ? 'opened' : 'closed'}`,
         {
-          description: newStatus === 'active' 
+          description: isOpen 
             ? 'Your restaurant is now accepting orders' 
             : 'Your restaurant is now closed for orders'
         }
@@ -87,7 +83,7 @@ export default function RestaurantStatusControl() {
     return null
   }
 
-  const isActive = restaurant.status === 'active'
+  const isOpen = restaurant.restaurant_open
 
   return (
     <DropdownMenu>
@@ -96,7 +92,7 @@ export default function RestaurantStatusControl() {
           variant="outline" 
           size="sm" 
           className={`flex items-center space-x-2 ${
-            isActive 
+            isOpen 
               ? 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100' 
               : 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
           }`}
@@ -105,17 +101,17 @@ export default function RestaurantStatusControl() {
           <Store className="h-4 w-4" />
           <span className="hidden sm:inline">{restaurant.name}</span>
           <Badge 
-            variant={isActive ? 'default' : 'destructive'}
+            variant={isOpen ? 'default' : 'destructive'}
             className={`ml-2 ${
-              isActive 
+              isOpen 
                 ? 'bg-green-500 hover:bg-green-600' 
                 : 'bg-red-500 hover:bg-red-600'
             }`}
           >
             <div className={`w-2 h-2 rounded-full mr-1 ${
-              isActive ? 'bg-green-200' : 'bg-red-200'
-            } ${isActive ? 'animate-pulse' : ''}`}></div>
-            {isActive ? 'OPEN' : 'CLOSED'}
+              isOpen ? 'bg-green-200' : 'bg-red-200'
+            } ${isOpen ? 'animate-pulse' : ''}`}></div>
+            {isOpen ? 'OPEN' : 'CLOSED'}
           </Badge>
         </Button>
       </DropdownMenuTrigger>
@@ -129,26 +125,24 @@ export default function RestaurantStatusControl() {
         <div className="p-3 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              {isActive ? (
+              {isOpen ? (
                 <Power className="h-4 w-4 text-green-600" />
               ) : (
                 <PowerOff className="h-4 w-4 text-red-600" />
               )}
               <span className="text-sm font-medium">
-                {isActive ? 'Restaurant Open' : 'Restaurant Closed'}
+                {isOpen ? 'Restaurant Open' : 'Restaurant Closed'}
               </span>
             </div>
             <Switch
-              checked={isActive}
-              onCheckedChange={(checked) => 
-                updateRestaurantStatus(checked ? 'active' : 'inactive')
-              }
+              checked={isOpen}
+              onCheckedChange={updateRestaurantOpenStatus}
               disabled={loading}
             />
           </div>
           
           <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded">
-            {isActive ? (
+            {isOpen ? (
               <>
                 <p className="font-medium text-green-700">✅ Accepting Orders</p>
                 <p>Customers can place new orders</p>

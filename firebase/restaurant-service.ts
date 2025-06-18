@@ -35,6 +35,12 @@ export interface Restaurant {
   staff_management_code?: string
   inventory_management_approved?: boolean
   staff_management_approved?: boolean
+  // New permission fields
+  quick_order_approved: boolean
+  analytics_approved: boolean
+  customer_approved: boolean
+  restaurant_open: boolean
+  banner_image?: string
 }
 
 export interface MenuItem {
@@ -87,6 +93,7 @@ export interface Order {
   updatedAt: Date
   notes?: string
   orderSource: 'quick_order' | 'direct_order' // Track order source
+  paymentMethod?: 'cash' | 'card' | 'upi' | 'other' // Track payment method
   statusHistory?: {
     status: Order['status']
     timestamp: Date
@@ -216,7 +223,14 @@ export async function createRestaurant(name: string, adminEmail: string): Promis
       status: 'active',
       subscriptionStart: now,
       subscriptionEnd,
-      subscriptionStatus: 'active'
+      subscriptionStatus: 'active',
+      staff_management_code: '1234', // Default staff code
+      inventory_management_approved: false, // Initially false
+      staff_management_approved: false, // Initially false
+      quick_order_approved: false, // Initially false
+      analytics_approved: false, // Initially false
+      customer_approved: true, // Initially true
+      restaurant_open: true // Initially open
     }
 
     // Create restaurant document in restaurants collection
@@ -373,19 +387,18 @@ export async function createOrder(restaurantName: string, order: Omit<Order, 'id
       updatedAt: serverTimestamp()
     })
 
-    // Create or update customer record
+    // Register customer for tracking (but don't count as completed order yet)
     if (order.customerName && order.customerPhone) {
       try {
-        await createOrUpdateCustomer(restaurantName, {
+        await registerCustomerForOrder(restaurantName, {
           name: order.customerName,
           phone: order.customerPhone,
-          totalOrders: 1,
           lastVisit: new Date(),
-          favoriteItems: order.items.map(item => item.name)
+          orderItems: order.items.map(item => item.name)
         })
       } catch (customerError) {
-        console.warn('Failed to create/update customer:', customerError)
-        // Continue with order creation even if customer update fails
+        console.warn('Failed to register customer:', customerError)
+        // Continue with order creation even if customer registration fails
       }
     }
 
@@ -455,13 +468,27 @@ export async function updateOrderStatus(restaurantName: string, orderId: string,
       newStatusEntry
     ]
     
-    // If order is being marked as served, update inventory first
+    // If order is being marked as served, update inventory and complete customer registration
     if (status === 'served') {
       try {
         await processOrderInventoryUpdate(restaurantName, currentOrder.items, orderId)
       } catch (inventoryError) {
         console.warn('Failed to update inventory for order:', inventoryError)
         // Continue with order status update even if inventory update fails
+      }
+
+      // Complete customer registration for served orders
+      if (currentOrder.customerName && currentOrder.customerPhone) {
+        try {
+          await completeCustomerOrder(restaurantName, {
+            name: currentOrder.customerName,
+            phone: currentOrder.customerPhone,
+            orderItems: currentOrder.items.map(item => item.name)
+          })
+        } catch (customerError) {
+          console.warn('Failed to complete customer order registration:', customerError)
+          // Continue with order status update even if customer update fails
+        }
       }
     }
     
@@ -553,6 +580,131 @@ export function subscribeToTables(restaurantName: string, callback: (tables: Tab
 }
 
 // Customer Management
+
+// Register customer during order creation (without counting completed orders yet)
+export async function registerCustomerForOrder(restaurantName: string, customerData: {
+  name: string
+  phone: string
+  lastVisit: Date
+  orderItems: string[]
+}): Promise<Customer> {
+  try {
+    const restaurantId = getRestaurantCollectionName(restaurantName)
+    
+    // Create document ID from customer phone
+    const docId = normalizePhoneNumber(customerData.phone)
+    
+    const docRef = doc(db, 'restaurants', restaurantId, 'customers', docId)
+    
+    // Check if customer already exists
+    const existingDoc = await getDoc(docRef)
+    
+    if (existingDoc.exists()) {
+      // Update existing customer info but don't increment orders yet
+      const existingData = existingDoc.data() as Customer
+      
+      await updateDoc(docRef, {
+        name: customerData.name, // Update name in case it changed
+        lastVisit: serverTimestamp()
+      })
+      
+      return {
+        ...existingData,
+        id: docId,
+        name: customerData.name,
+        lastVisit: customerData.lastVisit
+      }
+    } else {
+      // Create new customer with 0 completed orders initially
+      await setDoc(docRef, {
+        name: customerData.name,
+        phone: customerData.phone,
+        totalOrders: 0, // Will be incremented when order is completed
+        lastVisit: serverTimestamp(),
+        favoriteItems: [],
+        createdAt: serverTimestamp()
+      })
+
+      return {
+        id: docId,
+        name: customerData.name,
+        phone: customerData.phone,
+        totalOrders: 0,
+        lastVisit: customerData.lastVisit,
+        favoriteItems: [],
+        createdAt: new Date()
+      }
+    }
+  } catch (error) {
+    console.error('Error registering customer:', error)
+    throw new Error('Failed to register customer')
+  }
+}
+
+// Complete customer registration when order is served
+export async function completeCustomerOrder(restaurantName: string, customerData: {
+  name: string
+  phone: string
+  orderItems: string[]
+}): Promise<Customer> {
+  try {
+    const restaurantId = getRestaurantCollectionName(restaurantName)
+    
+    // Create document ID from customer phone
+    const docId = normalizePhoneNumber(customerData.phone)
+    
+    const docRef = doc(db, 'restaurants', restaurantId, 'customers', docId)
+    
+    // Check if customer exists
+    const existingDoc = await getDoc(docRef)
+    
+    if (existingDoc.exists()) {
+      // Update existing customer with completed order
+      const existingData = existingDoc.data() as Customer
+      const updatedFavoriteItems = [...new Set([...existingData.favoriteItems, ...customerData.orderItems])]
+      
+      await updateDoc(docRef, {
+        name: customerData.name, // Update name in case it changed
+        totalOrders: existingData.totalOrders + 1, // Increment only when order is completed
+        lastVisit: serverTimestamp(),
+        favoriteItems: updatedFavoriteItems
+      })
+      
+      return {
+        ...existingData,
+        id: docId,
+        name: customerData.name,
+        totalOrders: existingData.totalOrders + 1,
+        lastVisit: new Date(),
+        favoriteItems: updatedFavoriteItems
+      }
+    } else {
+      // Create new customer with first completed order
+      await setDoc(docRef, {
+        name: customerData.name,
+        phone: customerData.phone,
+        totalOrders: 1,
+        lastVisit: serverTimestamp(),
+        favoriteItems: customerData.orderItems,
+        createdAt: serverTimestamp()
+      })
+
+      return {
+        id: docId,
+        name: customerData.name,
+        phone: customerData.phone,
+        totalOrders: 1,
+        lastVisit: new Date(),
+        favoriteItems: customerData.orderItems,
+        createdAt: new Date()
+      }
+    }
+  } catch (error) {
+    console.error('Error completing customer order:', error)
+    throw new Error('Failed to complete customer order')
+  }
+}
+
 export async function createOrUpdateCustomer(restaurantName: string, customerData: {
   name: string
   phone: string
@@ -564,7 +716,7 @@ export async function createOrUpdateCustomer(restaurantName: string, customerDat
     const restaurantId = getRestaurantCollectionName(restaurantName)
     
     // Create document ID from customer phone
-    const docId = customerData.phone.replace(/[^0-9]/g, '')
+    const docId = normalizePhoneNumber(customerData.phone)
     
     const docRef = doc(db, 'restaurants', restaurantId, 'customers', docId)
     
@@ -644,6 +796,12 @@ export async function saveCustomer(restaurantName: string, customer: Omit<Custom
     console.error('Error saving customer:', error)
     throw new Error('Failed to save customer')
   }
+}
+
+// Helper function to ensure customer phone numbers are properly handled
+export function normalizePhoneNumber(phone: string): string {
+  // Remove all non-digit characters
+  return phone.replace(/[^0-9]/g, '')
 }
 
 // Notification Management
@@ -727,32 +885,8 @@ export async function processIncomingOrder(restaurantName: string, orderData: {
       orderId: createdOrder.id
     })
     
-    // Save customer data
-    const existingCustomerRef = doc(db, 'restaurants', restaurantId, 'customers', orderData.customerPhone)
-    const existingCustomer = await getDoc(existingCustomerRef)
-    
-    if (existingCustomer.exists()) {
-      // Update existing customer
-      const customerData = existingCustomer.data()
-      await updateDoc(existingCustomerRef, {
-        totalOrders: (customerData.totalOrders || 0) + 1,
-        lastVisit: serverTimestamp(),
-        // Add favorite items based on order
-        favoriteItems: [...new Set([
-          ...(customerData.favoriteItems || []),
-          ...orderData.items.map(item => item.menuItemId)
-        ])]
-      })
-    } else {
-      // Create new customer
-      await saveCustomer(restaurantName, {
-        name: orderData.customerName,
-        phone: orderData.customerPhone,
-        totalOrders: 1,
-        lastVisit: new Date(),
-        favoriteItems: orderData.items.map(item => item.menuItemId)
-      })
-    }
+    // Note: Customer registration is handled by the createOrder function above
+    // Customers will be properly registered when orders are completed (marked as 'served')
 
    
   } catch (error) {
@@ -890,12 +1024,46 @@ export function getOrderAnalytics(orders: Order[], menuItems: MenuItem[]) {
     .map(([category, data]) => ({ category, ...data }))
     .sort((a, b) => b.revenue - a.revenue)
 
+  // Payment method analytics
+  const paymentMethodData = new Map<string, { count: number; revenue: number }>()
+  completedOrders.forEach(order => {
+    const method = order.paymentMethod || 'cash' // default to cash if not specified
+    const existing = paymentMethodData.get(method) || { count: 0, revenue: 0 }
+    existing.count += 1
+    existing.revenue += order.totalAmount
+    paymentMethodData.set(method, existing)
+  })
+
+  const paymentMethodChartData = Array.from(paymentMethodData.entries())
+    .map(([method, data]) => ({ method, ...data }))
+    .sort((a, b) => b.revenue - a.revenue)
+
+  // Order source analytics
+  const orderSourceData = new Map<string, { count: number; revenue: number }>()
+  completedOrders.forEach(order => {
+    const source = order.orderSource || 'direct_order' // default to direct_order if not specified
+    const existing = orderSourceData.get(source) || { count: 0, revenue: 0 }
+    existing.count += 1
+    existing.revenue += order.totalAmount
+    orderSourceData.set(source, existing)
+  })
+
+  const orderSourceChartData = Array.from(orderSourceData.entries())
+    .map(([source, data]) => ({ 
+      source: source === 'quick_order' ? 'Quick Order' : 'Regular Order', 
+      sourceKey: source,
+      ...data 
+    }))
+    .sort((a, b) => b.revenue - a.revenue)
+
   return {
     totalRevenue,
     averageOrderValue: completedOrders.length > 0 ? totalRevenue / completedOrders.length : 0,
     popularItems,
     dailyRevenue,
     categoryChartData,
+    paymentMethodChartData,
+    orderSourceChartData,
     totalOrders: orders.length,
     completedOrders: completedOrders.length,
     pendingOrders: orders.filter(order => ['pending', 'preparing', 'ready'].includes(order.status)).length
@@ -1368,12 +1536,46 @@ export function getOrderAnalyticsWithDateFilter(
     .map(([category, data]) => ({ category, ...data }))
     .sort((a, b) => b.revenue - a.revenue)
 
+  // Payment method analytics for filtered data
+  const paymentMethodData = new Map<string, { count: number; revenue: number }>()
+  completedOrders.forEach(order => {
+    const method = order.paymentMethod || 'cash' // default to cash if not specified
+    const existing = paymentMethodData.get(method) || { count: 0, revenue: 0 }
+    existing.count += 1
+    existing.revenue += order.totalAmount
+    paymentMethodData.set(method, existing)
+  })
+
+  const paymentMethodChartData = Array.from(paymentMethodData.entries())
+    .map(([method, data]) => ({ method, ...data }))
+    .sort((a, b) => b.revenue - a.revenue)
+
+  // Order source analytics for filtered data
+  const orderSourceData = new Map<string, { count: number; revenue: number }>()
+  completedOrders.forEach(order => {
+    const source = order.orderSource || 'direct_order' // default to direct_order if not specified
+    const existing = orderSourceData.get(source) || { count: 0, revenue: 0 }
+    existing.count += 1
+    existing.revenue += order.totalAmount
+    orderSourceData.set(source, existing)
+  })
+
+  const orderSourceChartData = Array.from(orderSourceData.entries())
+    .map(([source, data]) => ({ 
+      source: source === 'quick_order' ? 'Quick Order' : 'Regular Order', 
+      sourceKey: source,
+      ...data 
+    }))
+    .sort((a, b) => b.revenue - a.revenue)
+
   return {
     totalRevenue,
     averageOrderValue: completedOrders.length > 0 ? totalRevenue / completedOrders.length : 0,
     popularItems,
     dailyRevenue,
     categoryChartData,
+    paymentMethodChartData,
+    orderSourceChartData,
     totalOrders: filteredOrders.length,
     completedOrders: completedOrders.length,
     pendingOrders: filteredOrders.filter(order => ['pending', 'preparing', 'ready'].includes(order.status)).length,
@@ -1384,4 +1586,37 @@ export function getOrderAnalyticsWithDateFilter(
 export function checkPremiumSubscription(restaurant: Restaurant): boolean {
   const subscriptionStatus = getSubscriptionStatus(restaurant)
   return subscriptionStatus.isValid && restaurant.subscriptionStatus === 'active'
+}
+
+export async function updateRestaurantStatus(restaurantName: string, updates: {
+  restaurant_open?: boolean
+  quick_order_approved?: boolean
+  analytics_approved?: boolean
+  customer_approved?: boolean
+  inventory_management_approved?: boolean
+  staff_management_approved?: boolean
+}): Promise<void> {
+  try {
+    const restaurantId = getRestaurantCollectionName(restaurantName)
+    await updateDoc(doc(db, 'restaurants', restaurantId), {
+      ...updates,
+      updatedAt: serverTimestamp()
+    })
+  } catch (error) {
+    console.error('Error updating restaurant status:', error)
+    throw new Error('Failed to update restaurant status')
+  }
+}
+
+export async function updateRestaurantBanner(restaurantName: string, bannerUrl: string): Promise<void> {
+  try {
+    const restaurantId = getRestaurantCollectionName(restaurantName)
+    await updateDoc(doc(db, 'restaurants', restaurantId), {
+      banner_image: bannerUrl,
+      updatedAt: serverTimestamp()
+    })
+  } catch (error) {
+    console.error('Error updating restaurant banner:', error)
+    throw new Error('Failed to update restaurant banner')
+  }
 } 

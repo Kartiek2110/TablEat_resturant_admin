@@ -20,19 +20,23 @@ import {
   ShoppingCart,
   Search,
   Star,
-  TrendingUp
+  TrendingUp,
+  Download
 } from "lucide-react"
 import { useAuth } from '@/contexts/AuthContext'
 import { 
   subscribeToCustomers,
   type Customer 
 } from '@/firebase/restaurant-service'
+import * as XLSX from 'xlsx'
+import { toast } from 'sonner'
 
 export default function CustomersPage() {
   const { restaurantName } = useAuth()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
     if (!restaurantName) return
@@ -56,6 +60,66 @@ export default function CustomersPage() {
   const totalOrders = customers.reduce((sum, customer) => sum + customer.totalOrders, 0)
   const averageOrdersPerCustomer = totalCustomers > 0 ? totalOrders / totalCustomers : 0
   const loyalCustomers = customers.filter(customer => customer.totalOrders >= 3).length
+
+  const exportToExcel = async () => {
+    if (customers.length === 0) {
+      toast.error("No customer data to export")
+      return
+    }
+
+    setExporting(true)
+    try {
+      // Prepare data for Excel
+      const excelData = customers.map((customer, index) => ({
+        'S.No': index + 1,
+        'Customer Name': customer.name,
+        'Phone Number': customer.phone,
+        'Email': customer.email || 'N/A',
+        'Total Orders': customer.totalOrders,
+        'Last Visit': customer.lastVisit.toLocaleDateString(),
+        'Last Visit Time': customer.lastVisit.toLocaleTimeString(),
+        'Registration Date': customer.createdAt.toLocaleDateString(),
+        'Favorite Items': customer.favoriteItems.join(', ') || 'None',
+        'Customer Status': customer.totalOrders >= 5 ? 'VIP' : customer.totalOrders >= 3 ? 'Loyal' : 'Regular'
+      }))
+
+      // Create workbook and worksheet
+      const workbook = XLSX.utils.book_new()
+      const worksheet = XLSX.utils.json_to_sheet(excelData)
+
+      // Set column widths
+      const columnWidths = [
+        { wch: 8 },   // S.No
+        { wch: 20 },  // Customer Name
+        { wch: 15 },  // Phone Number
+        { wch: 25 },  // Email
+        { wch: 12 },  // Total Orders
+        { wch: 12 },  // Last Visit
+        { wch: 12 },  // Last Visit Time
+        { wch: 15 },  // Registration Date
+        { wch: 30 },  // Favorite Items
+        { wch: 15 }   // Customer Status
+      ]
+      worksheet['!cols'] = columnWidths
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Customers')
+
+      // Generate filename with current date
+      const currentDate = new Date().toISOString().split('T')[0]
+      const filename = `customers_${restaurantName}_${currentDate}.xlsx`
+
+      // Write and download file
+      XLSX.writeFile(workbook, filename)
+      
+      toast.success(`Customer data exported successfully! (${customers.length} customers)`)
+    } catch (error) {
+      console.error('Error exporting to Excel:', error)
+      toast.error("Failed to export customer data")
+    } finally {
+      setExporting(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -83,6 +147,14 @@ export default function CustomersPage() {
             <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
             {totalCustomers} Customers
           </Badge>
+          <Button
+            onClick={exportToExcel}
+            disabled={exporting || customers.length === 0}
+            className="bg-green-600 hover:bg-green-700 text-white"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            {exporting ? 'Exporting...' : 'Export to Excel'}
+          </Button>
         </div>
       </div>
 
@@ -166,7 +238,7 @@ export default function CustomersPage() {
           {/* Search */}
           <Card>
             <CardHeader>
-              <CardTitle>Customer Database</CardTitle>
+              <CardTitle>Customer Database ({filteredCustomers.length} of {totalCustomers})</CardTitle>
               <CardDescription>Search and manage your customers</CardDescription>
             </CardHeader>
             <CardContent>
@@ -180,91 +252,94 @@ export default function CustomersPage() {
                 />
               </div>
 
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Phone</TableHead>
-                    <TableHead>Total Orders</TableHead>
-                    <TableHead>Last Visit</TableHead>
-                    <TableHead>Favorite Items</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredCustomers.map((customer) => (
-                    <TableRow key={customer.id}>
-                      <TableCell>
-                        <div className="flex items-center space-x-3">
-                          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-                            {customer.name.charAt(0).toUpperCase()}
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Customer</TableHead>
+                      <TableHead>Phone</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Total Orders</TableHead>
+                      <TableHead>Last Visit</TableHead>
+                      <TableHead>Favorite Items</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredCustomers.map((customer) => (
+                      <TableRow key={customer.id}>
+                        <TableCell>
+                          <div className="flex items-center space-x-3">
+                            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                              {customer.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="font-medium">{customer.name}</div>
+                              <div className="text-sm text-gray-500">
+                                Member since {customer.createdAt.toLocaleDateString()}
+                              </div>
+                            </div>
                           </div>
-                          <div>
-                            <div className="font-medium">{customer.name}</div>
-                            <div className="text-sm text-gray-500">Customer ID: {customer.id}</div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <Phone className="h-4 w-4 text-gray-400" />
+                            <span className="font-mono">{customer.phone}</span>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-2">
-                          <Phone className="h-4 w-4 text-gray-400" />
-                          <span>{customer.phone}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="bg-blue-50 text-blue-700">
-                          {customer.totalOrders} orders
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-2">
-                          <Calendar className="h-4 w-4 text-gray-400" />
-                          <span className="text-sm">
-                            {customer.lastVisit.toLocaleDateString()}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {customer.favoriteItems?.slice(0, 3).map((item, index) => (
-                            <Badge key={index} variant="secondary" className="text-xs">
-                              {item.replace(/_/g, ' ')}
+                        </TableCell>
+                        <TableCell>
+                          {customer.email || (
+                            <span className="text-gray-400 italic">No email</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <ShoppingCart className="h-4 w-4 text-gray-400" />
+                            <span className="font-semibold">{customer.totalOrders}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <Calendar className="h-4 w-4 text-gray-400" />
+                            <div>
+                              <div className="text-sm">{customer.lastVisit.toLocaleDateString()}</div>
+                              <div className="text-xs text-gray-500">{customer.lastVisit.toLocaleTimeString()}</div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="max-w-32 truncate text-sm">
+                            {customer.favoriteItems.length > 0 ? (
+                              <span title={customer.favoriteItems.join(', ')}>
+                                {customer.favoriteItems.slice(0, 2).join(', ')}
+                                {customer.favoriteItems.length > 2 && ` +${customer.favoriteItems.length - 2} more`}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 italic">None yet</span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {customer.totalOrders >= 5 ? (
+                            <Badge className="bg-purple-100 text-purple-800 border-purple-200">
+                              <Star className="h-3 w-3 mr-1" />
+                              VIP
                             </Badge>
-                          ))}
-                          {customer.favoriteItems && customer.favoriteItems.length > 3 && (
-                            <Badge variant="secondary" className="text-xs">
-                              +{customer.favoriteItems.length - 3} more
+                          ) : customer.totalOrders >= 3 ? (
+                            <Badge className="bg-green-100 text-green-800 border-green-200">
+                              Loyal
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline">
+                              Regular
                             </Badge>
                           )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {customer.totalOrders >= 5 ? (
-                          <Badge className="bg-yellow-100 text-yellow-800">
-                            <Star className="h-3 w-3 mr-1" />
-                            VIP
-                          </Badge>
-                        ) : customer.totalOrders >= 3 ? (
-                          <Badge className="bg-green-100 text-green-800">
-                            Loyal
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline">
-                            New
-                          </Badge>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-
-              {filteredCustomers.length === 0 && searchTerm && (
-                <div className="text-center py-8 text-gray-500">
-                  <Search className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No customers found matching "{searchTerm}"</p>
-                </div>
-              )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         </>

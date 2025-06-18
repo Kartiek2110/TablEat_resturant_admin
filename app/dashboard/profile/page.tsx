@@ -1,27 +1,31 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { UserCircle, Building, Mail, Phone, MapPin, Clock } from "lucide-react"
+import { UserCircle, Building, Mail, Phone, MapPin, Clock, Upload, Camera, X, Settings } from "lucide-react"
 import {
   getRestaurantByAdminEmail,
+  updateRestaurantBanner,
   type Restaurant
 } from '@/firebase/restaurant-service'
 import { updateDoc, doc } from 'firebase/firestore'
 import { db } from '@/firebase/config'
 import SubscriptionStatus from '@/components/SubscriptionStatus'
 import { toast } from "sonner"
+import { Badge } from "@/components/ui/badge"
 
 export default function ProfilePage() {
   const { user, restaurantName } = useAuth()
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [uploadingBanner, setUploadingBanner] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -88,6 +92,62 @@ export default function ProfilePage() {
     }
   }
 
+  const handleBannerUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file || !restaurantName) return
+
+    // Check file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be less than 5MB')
+      return
+    }
+
+    // Check file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file')
+      return
+    }
+
+    setUploadingBanner(true)
+    
+    try {
+      // Convert to base64 for storage (in a real app, you'd upload to cloud storage)
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.readAsDataURL(file)
+      })
+
+      await updateRestaurantBanner(restaurantName, base64)
+      
+      // Update local state
+      setRestaurant(prev => prev ? { ...prev, banner_image: base64 } : null)
+      
+      toast.success('Banner updated successfully!')
+    } catch (error) {
+      console.error('Error uploading banner:', error)
+      toast.error('Failed to upload banner')
+    } finally {
+      setUploadingBanner(false)
+    }
+  }
+
+  const removeBanner = async () => {
+    if (!restaurantName) return
+    
+    setUploadingBanner(true)
+    try {
+      await updateRestaurantBanner(restaurantName, '')
+      setRestaurant(prev => prev ? { ...prev, banner_image: '' } : null)
+      toast.success('Banner removed successfully!')
+    } catch (error) {
+      console.error('Error removing banner:', error)
+      toast.error('Failed to remove banner')
+    } finally {
+      setUploadingBanner(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -110,6 +170,93 @@ export default function ProfilePage() {
           </p>
         </div>
       </div>
+
+      {/* Banner Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Camera className="h-5 w-5" />
+            <span>Restaurant Banner</span>
+          </CardTitle>
+          <CardDescription>
+            Upload a banner image for your restaurant (4:1 aspect ratio recommended)
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="relative">
+            <div 
+              className="w-full h-64 bg-gradient-to-r from-blue-400 to-purple-500 rounded-lg overflow-hidden relative group cursor-pointer"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {restaurant?.banner_image ? (
+                <img 
+                  src={restaurant.banner_image} 
+                  alt="Restaurant Banner" 
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="flex items-center justify-center h-full text-white">
+                  <div className="text-center">
+                    <Camera className="h-12 w-12 mx-auto mb-2 opacity-70" />
+                    <p className="text-lg font-medium">Add Restaurant Banner</p>
+                    <p className="text-sm opacity-80">Click to upload image</p>
+                  </div>
+                </div>
+              )}
+              
+              {/* Overlay */}
+              <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <div className="text-white text-center">
+                  <Upload className="h-8 w-8 mx-auto mb-2" />
+                  <p className="font-medium">
+                    {restaurant?.banner_image ? 'Change Banner' : 'Upload Banner'}
+                  </p>
+                </div>
+              </div>
+              
+              {/* Remove button */}
+              {restaurant?.banner_image && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    removeBanner()
+                  }}
+                  disabled={uploadingBanner}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+            
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleBannerUpload}
+              className="hidden"
+              disabled={uploadingBanner}
+            />
+            
+            {uploadingBanner && (
+              <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center">
+                <div className="text-white text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
+                  <p>Uploading...</p>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <div className="mt-4 text-sm text-gray-600">
+            <p>• Recommended size: 1200x400 pixels (4:1 ratio)</p>
+            <p>• Maximum file size: 5MB</p>
+            <p>• Supported formats: JPG, PNG, GIF</p>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 md:grid-cols-2">
         {/* Restaurant Information */}
@@ -196,43 +343,74 @@ export default function ProfilePage() {
             onRenewal={() => window.location.reload()} 
           />
 
-          {/* Account Details */}
+          {/* Feature Permissions */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
-                <UserCircle className="h-5 w-5" />
-                <span>Account Details</span>
+                <Settings className="h-5 w-5" />
+                <span>Feature Permissions</span>
               </CardTitle>
+              <CardDescription>
+                Control which features are available for your restaurant
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">Account Created</span>
+              <div className="grid gap-4">
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div>
+                    <div className="font-medium">Quick Order</div>
+                    <div className="text-sm text-gray-600">Enable quick order functionality</div>
+                  </div>
+                  <Badge variant={restaurant?.quick_order_approved ? 'default' : 'secondary'}>
+                    {restaurant?.quick_order_approved ? 'Enabled' : 'Disabled'}
+                  </Badge>
                 </div>
-                <span className="text-sm font-medium">
-                  {restaurant?.createdAt.toLocaleDateString()}
-                </span>
+
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div>
+                    <div className="font-medium">Analytics</div>
+                    <div className="text-sm text-gray-600">Access to analytics and reports</div>
+                  </div>
+                  <Badge variant={restaurant?.analytics_approved ? 'default' : 'secondary'}>
+                    {restaurant?.analytics_approved ? 'Enabled' : 'Disabled'}
+                  </Badge>
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div>
+                    <div className="font-medium">Customer Management</div>
+                    <div className="text-sm text-gray-600">Manage customer database</div>
+                  </div>
+                  <Badge variant={restaurant?.customer_approved ? 'default' : 'secondary'}>
+                    {restaurant?.customer_approved ? 'Enabled' : 'Disabled'}
+                  </Badge>
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div>
+                    <div className="font-medium">Inventory Management</div>
+                    <div className="text-sm text-gray-600">Track inventory and stock levels</div>
+                  </div>
+                  <Badge variant={restaurant?.inventory_management_approved ? 'default' : 'secondary'}>
+                    {restaurant?.inventory_management_approved ? 'Enabled' : 'Disabled'}
+                  </Badge>
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div>
+                    <div className="font-medium">Staff Management</div>
+                    <div className="text-sm text-gray-600">Manage staff and attendance</div>
+                  </div>
+                  <Badge variant={restaurant?.staff_management_approved ? 'default' : 'secondary'}>
+                    {restaurant?.staff_management_approved ? 'Enabled' : 'Disabled'}
+                  </Badge>
+                </div>
               </div>
 
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Mail className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">Admin Email</span>
-                </div>
-                <span className="text-sm font-medium">
-                  {user?.email}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Building className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">Restaurant ID</span>
-                </div>
-                <span className="text-sm font-medium">
-                  {restaurant?.id}
-                </span>
+              <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  <strong>Note:</strong> Contact support to enable additional features. Some features may require subscription upgrades.
+                </p>
               </div>
             </CardContent>
           </Card>

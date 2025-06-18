@@ -121,8 +121,8 @@ export function LoginForm() {
         <Card className="mx-auto max-w-lg w-full border-0 shadow-2xl backdrop-blur-sm bg-white/95 relative z-10">
           <CardHeader className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-600 text-white rounded-t-lg p-10">
             <div className="text-center">
-              <div className="bg-white/20 rounded-full p-4 w-20 h-20 mx-auto mb-6 backdrop-blur-sm">
-                <UserPlus className="h-12 w-12 mx-auto text-white animate-pulse" />
+              <div className="flex items-center justify-center bg-white rounded-full w-24 h-24 mx-auto mb-6 backdrop-blur-sm">
+                <img src="/TablEat_Logo.png" alt="TablEat Logo" className="w-24 h-24 mx-auto " />
               </div>
               <CardTitle className="text-3xl font-bold mb-2">Create Admin Account</CardTitle>
               <CardDescription className="text-emerald-100 text-lg font-medium">
@@ -238,10 +238,9 @@ export function LoginForm() {
       <Card className="mx-auto max-w-lg w-full border-0 shadow-2xl backdrop-blur-sm bg-white/95 relative z-10">
         <CardHeader className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-t-lg p-10">
           <div className="text-center">
-            <div className="bg-white/20 rounded-full p-6 w-24 h-24 mx-auto mb-6 backdrop-blur-sm">
-              <div className="text-center">
-                <h1 className="text-2xl font-bold text-white">🍽️</h1>
-                <p className="text-xs text-white/90 mt-1">TablEat</p>
+            <div className="bg-white rounded-full w-24 h-24 mx-auto mb-6 backdrop-blur-sm">
+              <div className="flex items-center justify-center">
+                <img src="/TablEat_Logo.png" alt="TablEat Logo" className="w-24 h-24" />
               </div>
             </div>
             <CardTitle className="text-3xl font-bold mb-2">Admin Login</CardTitle>
@@ -350,6 +349,7 @@ export function LoginForm() {
               </Button>
             </div>
           </form>
+          <h1 className="text-center text-sm text-gray-500 mt-4">Version 1.0.0</h1>
         </CardContent>
       </Card>
     </div>

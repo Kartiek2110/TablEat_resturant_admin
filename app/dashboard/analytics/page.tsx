@@ -76,6 +76,8 @@ export default function AnalyticsPage() {
     popularItems, 
     dailyRevenue, 
     categoryChartData,
+    paymentMethodChartData,
+    orderSourceChartData,
     completedOrders,
     pendingOrders,
     totalOrders
@@ -325,6 +327,160 @@ export default function AnalyticsPage() {
                 ) : (
                   <div className="flex items-center justify-center h-[300px] text-gray-500">
                     No category data available
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Payment Method and Order Source Charts */}
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Payment Method Distribution */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Payment Methods</CardTitle>
+                <CardDescription>Revenue breakdown by payment method</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {paymentMethodChartData && paymentMethodChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={paymentMethodChartData}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ method, percent }) => `${method.toUpperCase()} ${(percent * 100).toFixed(2)}%`}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        dataKey="revenue"
+                      >
+                        {paymentMethodChartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value: number) => [`₹${value.toFixed(2)}`, 'Revenue']} />  
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-[300px] text-gray-500">
+                    No payment method data available
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Order Source Distribution */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Order Sources</CardTitle>
+                <CardDescription>Revenue from Quick Orders vs Regular Orders</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {orderSourceChartData && orderSourceChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={orderSourceChartData}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ source, percent }) => `${source} ${(percent * 100).toFixed(2)}%`}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        dataKey="revenue"
+                      >
+                        {orderSourceChartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value: number) => [`₹${value.toFixed(2)}`, 'Revenue']} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-[300px] text-gray-500">
+                    No order source data available
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Payment Method and Order Source Stats Tables */}
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Payment Method Stats */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Payment Method Statistics</CardTitle>
+                <CardDescription>Detailed breakdown of payment preferences</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {paymentMethodChartData && paymentMethodChartData.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Payment Method</TableHead>
+                        <TableHead>Orders</TableHead>
+                        <TableHead>Revenue</TableHead>
+                        <TableHead>Avg Value</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paymentMethodChartData.map((method, index) => (
+                        <TableRow key={method.method}>
+                          <TableCell className="font-medium">
+                            {method.method.toUpperCase()}
+                          </TableCell>
+                          <TableCell>{method.count}</TableCell>
+                          <TableCell>₹{method.revenue.toFixed(2)}</TableCell>
+                          <TableCell>₹{(method.revenue / method.count).toFixed(2)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <DollarSign className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No payment method data available</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Order Source Stats */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Order Source Statistics</CardTitle>
+                <CardDescription>Performance comparison between order channels</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {orderSourceChartData && orderSourceChartData.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Order Source</TableHead>
+                        <TableHead>Orders</TableHead>
+                        <TableHead>Revenue</TableHead>
+                        <TableHead>Avg Value</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {orderSourceChartData.map((source, index) => (
+                        <TableRow key={source.sourceKey}>
+                          <TableCell className="font-medium">
+                            {source.source}
+                          </TableCell>
+                          <TableCell>{source.count}</TableCell>
+                          <TableCell>₹{source.revenue.toFixed(2)}</TableCell>
+                          <TableCell>₹{(source.revenue / source.count).toFixed(2)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <ShoppingCart className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No order source data available</p>
                   </div>
                 )}
               </CardContent>

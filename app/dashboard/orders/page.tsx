@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, ShoppingCart, DollarSign, TrendingUp, Clock, AlertTriangle, CheckCircle, User, XCircle } from "lucide-react"
+import { Search, ShoppingCart, DollarSign, TrendingUp, Clock, AlertTriangle, CheckCircle, User, XCircle, Download } from "lucide-react"
 import { updateOrderStatus, type Order } from '@/firebase/restaurant-service'
 import { useAuth } from '@/contexts/AuthContext'
 import OrderDetailsDialog from '@/components/OrderDetailsDialog'
@@ -19,6 +19,8 @@ export default function OrdersPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [isOrderDialogOpen, setIsOrderDialogOpen] = useState(false)
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
 
   // Filter orders based on search term
   const filteredOrders = orders.filter(order =>
@@ -79,23 +81,55 @@ export default function OrdersPage() {
     const minutesAgo = Math.floor((now.getTime() - order.createdAt.getTime()) / 60000)
     
     if (order.status === 'pending') {
+      let text = ''
+      if (minutesAgo >= 2880) { // More than 2 days
+        const days = Math.floor(minutesAgo / 1440)
+        text = `${days}d waiting`
+      } else if (minutesAgo >= 120) { // More than 2 hours
+        const hours = Math.floor(minutesAgo / 60)
+        text = `${hours}h waiting`
+      } else {
+        text = `${minutesAgo}m waiting`
+      }
+      
       return {
-        text: `${minutesAgo}m waiting`,
+        text,
         urgencyLevel: minutesAgo > 30 ? 'critical' : minutesAgo > 15 ? 'warning' : 'normal'
       }
     } else if (order.status === 'served') {
       const servedStatus = order.statusHistory?.find(s => s.status === 'served')
       if (servedStatus) {
-        const totalTime = Math.floor((servedStatus.timestamp.getTime() - order.createdAt.getTime()) / 60000)
+        const totalMinutes = Math.floor((servedStatus.timestamp.getTime() - order.createdAt.getTime()) / 60000)
+        let text = ''
+        if (totalMinutes >= 2880) {
+          const days = Math.floor(totalMinutes / 1440)
+          text = `${days}d total`
+        } else if (totalMinutes >= 120) {
+          const hours = Math.floor(totalMinutes / 60)
+          text = `${hours}h total`
+        } else {
+          text = `${totalMinutes}m total`
+        }
         return {
-          text: `${totalTime}m total`,
+          text,
           urgencyLevel: 'normal'
         }
       }
     }
     
+    let text = ''
+    if (minutesAgo >= 2880) {
+      const days = Math.floor(minutesAgo / 1440)
+      text = `${days}d ago`
+    } else if (minutesAgo >= 120) {
+      const hours = Math.floor(minutesAgo / 60)
+      text = `${hours}h ago`
+    } else {
+      text = `${minutesAgo}m ago`
+    }
+    
     return {
-      text: `${minutesAgo}m ago`,
+      text,
       urgencyLevel: 'normal'
     }
   }
@@ -103,6 +137,84 @@ export default function OrdersPage() {
   const handleOrderClick = (order: Order) => {
     setSelectedOrder(order)
     setIsOrderDialogOpen(true)
+  }
+
+  const exportToExcel = () => {
+    // Filter orders by date range if dates are selected
+    let ordersToExport = filteredOrders
+    if (startDate && endDate) {
+      const start = new Date(startDate)
+      const end = new Date(endDate)
+      end.setHours(23, 59, 59) // Include full end date
+      
+      ordersToExport = filteredOrders.filter(order => {
+        const orderDate = order.createdAt
+        return orderDate >= start && orderDate <= end
+      })
+    }
+
+    // Import xlsx library dynamically
+    import('xlsx').then((XLSX) => {
+      // Prepare data for Excel
+      const excelData = ordersToExport.map(order => {
+        const timing = getOrderTiming(order)
+        return {
+          'Order ID': order.id,
+          'Customer Name': order.customerName,
+          'Customer Phone': order.customerPhone || '',
+          'Table Number': order.tableNumber,
+          'Items': order.items.map(item => `${item.quantity}x ${item.name} (₹${item.price})`).join('; '),
+          'Total Items': order.items.length,
+          'Total Amount': order.totalAmount,
+          'Order Status': order.status.toUpperCase(),
+          'Order Source': order.orderSource || 'direct_order',
+          'Timing': timing.text,
+          'Notes': order.notes || '',
+          'Created Date': order.createdAt.toLocaleDateString(),
+          'Created Time': order.createdAt.toLocaleTimeString(),
+          'Full DateTime': order.createdAt.toLocaleString(),
+        }
+      })
+
+      // Create workbook and worksheet
+      const workbook = XLSX.utils.book_new()
+      const worksheet = XLSX.utils.json_to_sheet(excelData)
+
+      // Set column widths for better readability
+      const columnWidths = [
+        { wch: 20 }, // Order ID
+        { wch: 20 }, // Customer Name
+        { wch: 15 }, // Customer Phone
+        { wch: 8 },  // Table Number
+        { wch: 50 }, // Items
+        { wch: 12 }, // Total Items
+        { wch: 12 }, // Total Amount
+        { wch: 12 }, // Order Status
+        { wch: 15 }, // Order Source
+        { wch: 15 }, // Timing
+        { wch: 30 }, // Notes
+        { wch: 12 }, // Created Date
+        { wch: 12 }, // Created Time
+        { wch: 20 }, // Full DateTime
+      ]
+      worksheet['!cols'] = columnWidths
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders')
+
+      // Generate filename with current date
+      const fileName = startDate && endDate 
+        ? `orders_${startDate}_to_${endDate}.xlsx`
+        : `orders_${new Date().toISOString().split('T')[0]}.xlsx`
+
+      // Save the file
+      XLSX.writeFile(workbook, fileName)
+      
+      toast.success(`Orders exported successfully as ${fileName}`)
+    }).catch((error) => {
+      console.error('Error exporting to Excel:', error)
+      toast.error('Failed to export orders. Please try again.')
+    })
   }
 
   if (!orders) {
@@ -119,11 +231,34 @@ export default function OrdersPage() {
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Order Management</h1>
-        <p className="text-muted-foreground">
-          Track and manage all your restaurant orders in real-time
-        </p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Order Management</h1>
+          <p className="text-muted-foreground">
+            Track and manage all your restaurant orders in real-time
+          </p>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-40"
+            />
+            <span>to</span>
+            <Input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="w-40"
+            />
+          </div>
+          <Button onClick={exportToExcel} className="flex items-center gap-2">
+            <Download className="h-4 w-4" />
+            Export to Excel
+          </Button>
+        </div>
       </div>
 
       {/* URGENT ORDERS ALERT */}

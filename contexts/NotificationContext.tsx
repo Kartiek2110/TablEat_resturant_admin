@@ -214,15 +214,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           const correspondingOrder = orders.find(o => o.id === notification.orderId)
           setShowPopup({ notification, order: correspondingOrder })
 
-          // Show toast notification
-          toast.error(`🚨 NEW ORDER - Table ${notification.tableNumber}`, {
-            description: notification.message,
-            duration: 8000,
-            action: {
-              label: 'View',
-              onClick: () => window.location.href = '/dashboard/orders'
-            }
-          })
+          // Show toast notification (defer to avoid render cycle)
+          setTimeout(() => {
+            toast.error(`🚨 NEW ORDER - Table ${notification.tableNumber}`, {
+              description: notification.message,
+              duration: 8000,
+              action: {
+                label: 'View',
+                onClick: () => window.location.href = '/dashboard/orders'
+              }
+            })
+          }, 0)
         }
       })
     }
@@ -261,14 +263,16 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
         setShowPopup({ notification: urgentNotification, order })
 
-        toast.error(`🚨 NEW ORDER - Table ${order.tableNumber}`, {
-          description: `${order.customerName} - ${order.items.length} items`,
-          duration: 8000,
-          action: {
-            label: 'View Now',
-            onClick: () => window.location.href = '/dashboard/orders'
-          }
-        })
+        setTimeout(() => {
+          toast.error(`🚨 NEW ORDER - Table ${order.tableNumber}`, {
+            description: `${order.customerName} - ${order.items.length} items`,
+            duration: 8000,
+            action: {
+              label: 'View Now',
+              onClick: () => window.location.href = '/dashboard/orders'
+            }
+          })
+        }, 0)
       })
     }
     
