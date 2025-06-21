@@ -105,24 +105,36 @@ export default function MenuManagement() {
   // Categories for dropdown
   const categories = [
     "Appetizers",
-    "Main Course",
-    "Desserts",
-    "Beverages",
-    "Burgers",
-    "Sandwiches",
-    "Wraps",
-    "Indo-Chinese",
+    "Baked",
+    "Beverages", 
     "Burritos",
-    "Tacos",
-    "Quesadillas",
-    "Nachos",
-    "Pizza",
-    "Pasta",
-    "Seafood",
-    "Vegetarian",
-    "Salads",
-    "Soups",
+    "Cold Coffee",
+    "Coffee",
     "Combo",
+    "Desserts",
+    "Drinks",
+    "Fries",
+    "Hot Chocolate",
+    "Hot Coffee",
+    "Ice Cream",
+    "Indo-Chinese",
+    "Juices",
+    "Main Course",
+    "Milkshakes",
+    "Nachos",
+    "Pasta",
+    "Pizza",
+    "Quesadillas",
+    "Salads",
+    "Sandwiches",
+    "Seafood",
+    "Shakes",
+    "Smoothies",
+    "Soups",
+    "Tacos",
+    "Tea",
+    "Vegetarian",
+    "Wraps",
   ];
 
   useEffect(() => {
@@ -412,7 +424,7 @@ export default function MenuManagement() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description">Description *</Label>
+                <Label htmlFor="description">Description</Label>
                 <Textarea
                   id="description"
                   value={formData.description}
@@ -874,7 +886,7 @@ export default function MenuManagement() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="edit-description">Description *</Label>
+              <Label htmlFor="edit-description">Description</Label>
               <Textarea
                 id="edit-description"
                 value={formData.description}
@@ -882,7 +894,6 @@ export default function MenuManagement() {
                   setFormData({ ...formData, description: e.target.value })
                 }
                 placeholder="Describe the menu item"
-                required
                 rows={3}
               />
             </div>

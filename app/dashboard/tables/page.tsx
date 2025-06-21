@@ -12,12 +12,15 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Plus, Edit2, Trash2, Users, CheckCircle, XCircle, Clock } from "lucide-react"
 import { 
   subscribeToTables,
+  subscribeToOrders,
   updateTableStatus,
-  type Table 
+  type Table,
+  type Order
 } from '@/firebase/restaurant-service'
 import { doc, setDoc, deleteDoc, collection } from 'firebase/firestore'
 import { db } from '@/firebase/config'
 import { toast } from "sonner"
+import OrderDetailsDialog from '@/components/OrderDetailsDialog'
 
 // Helper function to get restaurant collection name
 function getRestaurantCollectionName(restaurantName: string): string {
@@ -27,8 +30,11 @@ function getRestaurantCollectionName(restaurantName: string): string {
 export default function TablesPage() {
   const { restaurantName } = useAuth()
   const [tables, setTables] = useState<Table[]>([])
+  const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
+  const [isOrderDialogOpen, setIsOrderDialogOpen] = useState(false)
   const [formData, setFormData] = useState({
     tableNumber: '',
     capacity: ''
@@ -37,13 +43,26 @@ export default function TablesPage() {
   useEffect(() => {
     if (!restaurantName) return
 
-    const unsubscribe = subscribeToTables(restaurantName, (tableData) => {
+    const unsubscribeTables = subscribeToTables(restaurantName, (tableData) => {
       setTables(tableData)
       setLoading(false)
     })
 
-    return () => unsubscribe()
+    const unsubscribeOrders = subscribeToOrders(restaurantName, (orderData) => {
+      setOrders(orderData)
+    })
+
+    return () => {
+      unsubscribeTables()
+      unsubscribeOrders()
+    }
   }, [restaurantName])
+
+  const handleOrderClick = (order: Order) => {
+    setSelectedOrder(order)
+    setIsOrderDialogOpen(true)
+  }
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -134,57 +153,59 @@ export default function TablesPage() {
             Manage your restaurant tables and track occupancy
           </p>
         </div>
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="w-full sm:w-auto text-sm">
-              <Plus className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
-              Add Table
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Add New Table</DialogTitle>
-              <DialogDescription>
-                Add a new table to your restaurant
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="tableNumber">Table Number *</Label>
-                <Input
-                  id="tableNumber"
-                  type="number"
-                  min="1"
-                  value={formData.tableNumber}
-                  onChange={(e) => setFormData({ ...formData, tableNumber: e.target.value })}
-                  placeholder="Enter table number"
-                  required
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="capacity">Capacity (Number of Seats) *</Label>
-                <Input
-                  id="capacity"
-                  type="number"
-                  min="1"
-                  max="20"
-                  value={formData.capacity}
-                  onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
-                  placeholder="Enter seating capacity"
-                  required
-                />
-              </div>
-              
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit">Add Table</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <div className="flex gap-2">
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="w-full sm:w-auto text-sm">
+                <Plus className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
+                Add Table
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Add New Table</DialogTitle>
+                <DialogDescription>
+                  Add a new table to your restaurant
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="tableNumber">Table Number *</Label>
+                  <Input
+                    id="tableNumber"
+                    type="number"
+                    min="1"
+                    value={formData.tableNumber}
+                    onChange={(e) => setFormData({ ...formData, tableNumber: e.target.value })}
+                    placeholder="Enter table number"
+                    required
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="capacity">Capacity (Number of Seats) *</Label>
+                  <Input
+                    id="capacity"
+                    type="number"
+                    min="1"
+                    max="20"
+                    value={formData.capacity}
+                    onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
+                    placeholder="Enter seating capacity"
+                    required
+                  />
+                </div>
+                
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit">Add Table</Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Statistics */}
@@ -225,7 +246,7 @@ export default function TablesPage() {
         <CardHeader>
           <CardTitle>Restaurant Tables</CardTitle>
           <CardDescription>
-            Manage your table layout and occupancy status
+            Manage your table layout and occupancy status. Click occupied tables to view orders.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -257,9 +278,29 @@ export default function TablesPage() {
                   key={table.id} 
                   className={`relative transition-all duration-200 hover:shadow-md ${
                     table.occupied 
-                      ? 'border-red-200 bg-red-50' 
+                      ? 'border-red-200 bg-red-50 cursor-pointer hover:bg-red-100' 
                       : 'border-green-200 bg-green-50'
                   }`}
+                  onClick={() => {
+                    if (table.occupied && table.currentOrderId) {
+                      // Find the order associated with this table
+                      const associatedOrder = orders.find(order => order.id === table.currentOrderId)
+                      if (associatedOrder) {
+                        handleOrderClick(associatedOrder)
+                      } else {
+                        // Try to find by table number if currentOrderId doesn't match
+                        const orderByTable = orders.find(order => 
+                          order.tableNumber === table.tableNumber && 
+                          (order.status === 'pending' || order.status === 'preparing' || order.status === 'ready')
+                        )
+                        if (orderByTable) {
+                          handleOrderClick(orderByTable)
+                        } else {
+                          toast.error('No active order found for this table')
+                        }
+                      }
+                    }
+                  }}
                 >
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
@@ -282,11 +323,28 @@ export default function TablesPage() {
                       <span>{table.capacity} seats</span>
                     </div>
                     
+                    {table.occupied && table.currentOrderId && (
+                      <div className="text-sm bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-blue-800">Active Order</span>
+                          <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded">
+                            #{table.currentOrderId.slice(-6)}
+                          </span>
+                        </div>
+                        <div className="text-xs text-blue-600">
+                          Click to view order details
+                        </div>
+                      </div>
+                    )}
+                    
                     <div className="flex space-x-2">
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleToggleOccupancy(table)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleToggleOccupancy(table)
+                        }}
                         className="flex-1"
                       >
                         {table.occupied ? (
@@ -304,7 +362,11 @@ export default function TablesPage() {
                       
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="outline" size="sm">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <Trash2 className="h-3 w-3" />
                           </Button>
                         </AlertDialogTrigger>
@@ -334,6 +396,16 @@ export default function TablesPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Order Details Dialog */}
+      <OrderDetailsDialog
+        order={selectedOrder}
+        isOpen={isOrderDialogOpen}
+        onClose={() => {
+          setIsOrderDialogOpen(false)
+          setSelectedOrder(null)
+        }}
+      />
     </div>
   )
 }

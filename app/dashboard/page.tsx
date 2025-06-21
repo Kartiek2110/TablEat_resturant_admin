@@ -25,6 +25,7 @@ import {
   subscribeToMenuItems,
   updateTableStatus,
   processIncomingOrder,
+  syncTableStatusesWithOrders,
   type Order,
   type Table,
   type MenuItem,
@@ -32,6 +33,7 @@ import {
 } from '@/firebase/restaurant-service'
 import SubscriptionStatus from '@/components/SubscriptionStatus'
 import { NotificationList } from '@/components/notification-list'
+import { toast } from 'sonner'
 
 export default function Dashboard() {
   const { user, restaurantName } = useAuth()
@@ -101,27 +103,22 @@ export default function Dashboard() {
     }
   }, [user?.email, restaurantName])
 
-  // Auto-occupy tables for pending orders (optimized)
+  // Auto-sync table statuses for pending orders
   useEffect(() => {
     if (!restaurantName || pendingOrders.length === 0) return
 
-    const autoOccupyTables = async () => {
+    const syncTableStatuses = async () => {
       try {
-        const promises = pendingOrders.map(async (order) => {
-          const table = tables.find(t => t.tableNumber === order.tableNumber)
-          if (table && !table.occupied) {
-            return updateTableStatus(restaurantName, order.tableNumber, true, order.id)
-          }
-        })
-        
-        await Promise.all(promises.filter(Boolean))
+        await syncTableStatusesWithOrders(restaurantName)
       } catch (error) {
-        console.error('Error auto-occupying tables:', error)
+        console.error('Error syncing table statuses:', error)
       }
     }
 
-    autoOccupyTables()
-  }, [pendingOrders, tables, restaurantName])
+    // Add a small delay to ensure all data is loaded
+    const timer = setTimeout(syncTableStatuses, 1000)
+    return () => clearTimeout(timer)
+  }, [pendingOrders.length, restaurantName])
 
   // Memoized statistics calculation
   const statistics = useCallback(() => {
@@ -375,26 +372,51 @@ export default function Dashboard() {
           <CardHeader>
             <CardTitle>Table Status</CardTitle>
             <CardDescription>
-              Current table occupancy
+              Current table occupancy - Click occupied tables to view order details
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-2">
-              {tables.map((table) => (
-                <div 
-                  key={table.id} 
-                  className={`p-3 rounded-lg border text-center ${
-                    table.occupied 
-                      ? 'bg-red-50 border-red-200 text-red-700' 
-                      : 'bg-green-50 border-green-200 text-green-700'
-                  }`}
-                >
-                  <div className="font-medium">Table {table.tableNumber}</div>
-                  <div className="text-sm">
-                    {table.occupied ? 'Occupied' : 'Available'}
+              {tables.map((table) => {
+                const handleTableClick = async () => {
+                  if (table.occupied && table.currentOrderId) {
+                    // Find the order associated with this table
+                    const associatedOrder = orders.find(order => order.id === table.currentOrderId)
+                    if (associatedOrder) {
+                      handleOrderClick(associatedOrder)
+                    } else {
+                      toast.error('Order details not found')
+                    }
+                  }
+                }
+
+                return (
+                  <div 
+                    key={table.id} 
+                    className={`p-3 rounded-lg border text-center transition-all duration-200 ${
+                      table.occupied 
+                        ? 'bg-red-50 border-red-200 text-red-700 cursor-pointer hover:bg-red-100 hover:shadow-md transform hover:scale-105' 
+                        : 'bg-green-50 border-green-200 text-green-700'
+                    }`}
+                    onClick={handleTableClick}
+                  >
+                    <div className="font-medium">Table {table.tableNumber}</div>
+                    <div className="text-sm">
+                      {table.occupied ? 'Occupied' : 'Available'}
+                    </div>
+                    {table.occupied && table.currentOrderId && (
+                      <div className="text-xs mt-1 bg-white bg-opacity-50 rounded px-2 py-1">
+                        Order: #{table.currentOrderId.slice(-6)}
+                      </div>
+                    )}
+                    {table.occupied && (
+                      <div className="text-xs mt-1 opacity-75">
+                        Click to view order
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
             {tables.length === 0 && (
               <div className="text-center py-8 text-muted-foreground">

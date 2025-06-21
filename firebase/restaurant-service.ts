@@ -379,6 +379,8 @@ export function subscribeToMenuItems(restaurantName: string, callback: (items: M
 // Order Management
 export async function createOrder(restaurantName: string, order: Omit<Order, 'id' | 'createdAt' | 'updatedAt'>): Promise<Order> {
   try {
+    console.log(`🔵 Creating order for Table ${order.tableNumber} in ${restaurantName}`)
+    
     const restaurantId = getRestaurantCollectionName(restaurantName)
     const orderRef = collection(db, 'restaurants', restaurantId, 'orders')
     const docRef = await addDoc(orderRef, {
@@ -386,6 +388,8 @@ export async function createOrder(restaurantName: string, order: Omit<Order, 'id
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     })
+
+    console.log(`✅ Order created with ID: ${docRef.id}`)
 
     // Register customer for tracking (but don't count as completed order yet)
     if (order.customerName && order.customerPhone) {
@@ -396,6 +400,7 @@ export async function createOrder(restaurantName: string, order: Omit<Order, 'id
           lastVisit: new Date(),
           orderItems: order.items.map(item => item.name)
         })
+        console.log(`✅ Customer registered: ${order.customerName}`)
       } catch (customerError) {
         console.warn('Failed to register customer:', customerError)
         // Continue with order creation even if customer registration fails
@@ -412,17 +417,30 @@ export async function createOrder(restaurantName: string, order: Omit<Order, 'id
       isRead: false
     })
 
-    // Update table status
-    await updateTableStatus(restaurantName, order.tableNumber, true, docRef.id)
+    console.log(`✅ Notification created for order ${docRef.id}`)
 
-    return {
+    // Update table status
+    console.log(`🔄 Updating Table ${order.tableNumber} status to occupied...`)
+    try {
+      await updateTableStatus(restaurantName, order.tableNumber, true, docRef.id)
+      console.log(`✅ Table ${order.tableNumber} marked as occupied with order ${docRef.id}`)
+    } catch (tableError) {
+      console.error(`❌ Failed to update table ${order.tableNumber} status:`, tableError)
+      // Don't throw error here - order creation should succeed even if table update fails
+      // The auto-sync logic in the dashboard will handle any inconsistencies
+    }
+
+    const createdOrder = {
       id: docRef.id,
       ...order,
       createdAt: new Date(),
       updatedAt: new Date()
     }
+
+    console.log(`🎉 Order creation completed:`, createdOrder)
+    return createdOrder
   } catch (error) {
-    console.error('Error creating order:', error)
+    console.error('❌ Error creating order:', error)
     throw new Error('Failed to create order')
   }
 }
@@ -498,6 +516,16 @@ export async function updateOrderStatus(restaurantName: string, orderId: string,
       updatedAt: serverTimestamp()
     })
 
+    // Update table status when order is completed or cancelled
+    if (status === 'served' || status === 'cancelled') {
+      try {
+        await updateTableStatus(restaurantName, currentOrder.tableNumber, false)
+      } catch (tableError) {
+        console.warn('Failed to update table status:', tableError)
+        // Continue even if table update fails
+      }
+    }
+
     // Create notification for order status change
     if (status === 'ready') {
       await createNotification(restaurantName, {
@@ -543,21 +571,43 @@ export function subscribeToOrders(restaurantName: string, callback: (orders: Ord
 // Table Management
 export async function updateTableStatus(restaurantName: string, tableNumber: number, occupied: boolean, currentOrderId?: string): Promise<void> {
   try {
+    console.log(`🔄 updateTableStatus: Table ${tableNumber}, occupied: ${occupied}, orderId: ${currentOrderId}`)
+    
     const restaurantId = getRestaurantCollectionName(restaurantName)
+    console.log(`🔵 Restaurant ID: ${restaurantId}`)
+    
     const tablesRef = collection(db, 'restaurants', restaurantId, 'tables')
     const q = query(tablesRef, where('tableNumber', '==', tableNumber))
     const snapshot = await getDocs(q)
     
+    console.log(`🔍 Found ${snapshot.docs.length} tables with number ${tableNumber}`)
+    
     if (!snapshot.empty) {
       const tableDoc = snapshot.docs[0]
+      console.log(`📋 Table doc ID: ${tableDoc.id}, current data:`, tableDoc.data())
+      
       await updateDoc(tableDoc.ref, {
         occupied,
         currentOrderId: currentOrderId || null,
         updatedAt: serverTimestamp()
       })
+      
+      console.log(`✅ Table ${tableNumber} status updated successfully`)
+    } else {
+      console.warn(`⚠️ Table ${tableNumber} not found in ${restaurantName}`)
+      
+      // List all available tables for debugging
+      const allTablesSnapshot = await getDocs(tablesRef)
+      console.log(`📊 Available tables in ${restaurantName}:`)
+      allTablesSnapshot.docs.forEach(doc => {
+        const data = doc.data()
+        console.log(`  - Table ${data.tableNumber} (ID: ${doc.id})`)
+      })
+      
+      throw new Error(`Table ${tableNumber} not found`)
     }
   } catch (error) {
-    console.error('Error updating table status:', error)
+    console.error(`❌ Error updating table ${tableNumber} status:`, error)
     throw new Error('Failed to update table status')
   }
 }
@@ -857,6 +907,8 @@ export async function processIncomingOrder(restaurantName: string, orderData: {
   notes?: string
 }): Promise<void> {
   try {
+    console.log(`🔵 processIncomingOrder called for ${restaurantName}:`, orderData)
+    
     const restaurantId = getRestaurantCollectionName(restaurantName)
     
     // Create the order with pending status
@@ -871,9 +923,12 @@ export async function processIncomingOrder(restaurantName: string, orderData: {
       orderSource: 'direct_order'
     }
 
-    // Create order in Firebase
-    // Create the order (this will also create/update the customer)
+    console.log(`🔄 processIncomingOrder: About to create order with data:`, order)
+
+    // Create order in Firebase (this also updates table status automatically)
     const createdOrder = await createOrder(restaurantName, order)
+    
+    console.log(`✅ processIncomingOrder: Order created successfully:`, createdOrder)
     
     // Create notification for new order
     await createNotification(restaurantName, {
@@ -885,12 +940,14 @@ export async function processIncomingOrder(restaurantName: string, orderData: {
       orderId: createdOrder.id
     })
     
-    // Note: Customer registration is handled by the createOrder function above
+    console.log(`✅ processIncomingOrder: Notification created for order ${createdOrder.id}`)
+    
+    // Note: Customer registration and table status update are handled by the createOrder function above
     // Customers will be properly registered when orders are completed (marked as 'served')
 
    
   } catch (error) {
-    console.error('Error processing incoming order:', error)
+    console.error('❌ Error processing incoming order:', error)
     throw new Error('Failed to process order')
   }
 }
@@ -1618,5 +1675,52 @@ export async function updateRestaurantBanner(restaurantName: string, bannerUrl: 
   } catch (error) {
     console.error('Error updating restaurant banner:', error)
     throw new Error('Failed to update restaurant banner')
+  }
+}
+
+export async function syncTableStatusesWithOrders(restaurantName: string): Promise<void> {
+  try {
+    const restaurantId = getRestaurantCollectionName(restaurantName)
+    
+    // Get all orders and tables
+    const [ordersSnapshot, tablesSnapshot] = await Promise.all([
+      getDocs(collection(db, 'restaurants', restaurantId, 'orders')),
+      getDocs(collection(db, 'restaurants', restaurantId, 'tables'))
+    ])
+    
+    // Get active orders (not served or cancelled)
+    const activeOrders = ordersSnapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() } as Order & { id: string }))
+      .filter(order => order.status !== 'served' && order.status !== 'cancelled')
+    
+    // Group orders by table
+    const ordersByTable = new Map<number, string>()
+    activeOrders.forEach(order => {
+      ordersByTable.set(order.tableNumber, order.id)
+    })
+    
+    // Update each table
+    const updatePromises = tablesSnapshot.docs.map(async (tableDoc) => {
+      const tableData = tableDoc.data()
+      const tableNumber = tableData.tableNumber
+      const currentOrderId = ordersByTable.get(tableNumber)
+      const shouldBeOccupied = Boolean(currentOrderId)
+      
+      // Only update if status doesn't match
+      if (tableData.occupied !== shouldBeOccupied || tableData.currentOrderId !== currentOrderId) {
+        console.log(`Syncing Table ${tableNumber}: ${shouldBeOccupied ? 'occupied' : 'available'}`)
+        await updateDoc(tableDoc.ref, {
+          occupied: shouldBeOccupied,
+          currentOrderId: currentOrderId || null,
+          updatedAt: serverTimestamp()
+        })
+      }
+    })
+    
+    await Promise.all(updatePromises)
+    console.log('Table statuses synced successfully')
+  } catch (error) {
+    console.error('Error syncing table statuses:', error)
+    throw new Error('Failed to sync table statuses')
   }
 } 
