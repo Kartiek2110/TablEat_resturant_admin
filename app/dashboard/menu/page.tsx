@@ -420,7 +420,6 @@ export default function MenuManagement() {
                     setFormData({ ...formData, description: e.target.value })
                   }
                   placeholder="Describe the menu item"
-                  required
                   rows={3}
                 />
               </div>
