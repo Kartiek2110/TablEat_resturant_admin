@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Card,
@@ -53,6 +53,7 @@ import {
   AlertCircle,
   Star,
   Package,
+  Upload,
 } from "lucide-react";
 import {
   subscribeToMenuItems,
@@ -84,6 +85,8 @@ export default function MenuManagement() {
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [newlyCreatedItem, setNewlyCreatedItem] = useState<MenuItem | null>(null);
   const [ingredients, setIngredients] = useState<MenuItemIngredient[]>([]);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -98,9 +101,93 @@ export default function MenuManagement() {
     discountValue: "",
     discountValidFrom: "",
     discountValidTo: "",
+    imageSource: "url",
   });
   
   const [comboItems, setComboItems] = useState<{name: string, price: string}[]>([{ name: "", price: "" }])
+
+  // Compress image to reduce size
+  const compressImage = (file: File, maxWidth: number = 800, quality: number = 0.8): Promise<string> => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')!
+      const img = new Image()
+      
+      img.onload = () => {
+        // Calculate new dimensions while maintaining aspect ratio
+        let { width, height } = img
+        if (width > height) {
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width
+            width = maxWidth
+          }
+        } else {
+          if (height > maxWidth) {
+            width = (width * maxWidth) / height
+            height = maxWidth
+          }
+        }
+        
+        canvas.width = width
+        canvas.height = height
+        
+        // Draw and compress
+        ctx.drawImage(img, 0, 0, width, height)
+        const compressedBase64 = canvas.toDataURL('image/jpeg', quality)
+        resolve(compressedBase64)
+      }
+      
+      img.src = URL.createObjectURL(file)
+    })
+  }
+
+  // Handle image file upload
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Check file size (max 10MB before compression)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Image size must be less than 10MB')
+      return
+    }
+
+    // Check file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file')
+      return
+    }
+
+    setUploadingImage(true)
+    
+    try {
+      // Compress image to reduce size for Firestore storage
+      const compressedBase64 = await compressImage(file, 800, 0.7)
+      
+      // Check if compressed image is still too large (Firebase limit is ~1MB)
+      // Base64 adds ~33% overhead, so we need to be well under 1MB
+      const sizeInBytes = (compressedBase64.length * 3) / 4
+      if (sizeInBytes > 700000) { // 700KB limit to be safe
+        // Try with higher compression
+        const moreCompressed = await compressImage(file, 600, 0.5)
+        const newSize = (moreCompressed.length * 3) / 4
+        if (newSize > 700000) {
+          toast.error('Image is too large even after compression. Please use a smaller image.')
+          return
+        }
+        setFormData(prev => ({ ...prev, image: moreCompressed }))
+      } else {
+        setFormData(prev => ({ ...prev, image: compressedBase64 }))
+      }
+      
+      toast.success('Image uploaded and compressed successfully!')
+    } catch (error) {
+      console.error('Error uploading image:', error)
+      toast.error('Failed to upload image')
+    } finally {
+      setUploadingImage(false)
+    }
+  }
 
   // Categories for dropdown
   const categories = [
@@ -222,6 +309,12 @@ export default function MenuManagement() {
 
       // Only add fields if they have values (avoid undefined)
       if (formData.image.trim()) {
+        // Final safety check for image size before sending to Firebase
+        const imageSizeInBytes = (formData.image.length * 3) / 4
+        if (imageSizeInBytes > 700000) { // 700KB limit to be safe
+          toast.error('Image is too large for Firebase storage. Please use a smaller image or compress it further.')
+          return
+        }
         itemData.image = formData.image.trim();
       }
 
@@ -264,6 +357,7 @@ export default function MenuManagement() {
         discountValue: "",
         discountValidFrom: "",
         discountValidTo: "",
+        imageSource: "url",
       });
       setComboItems([]);
     } catch (error) {
@@ -274,6 +368,10 @@ export default function MenuManagement() {
 
   const handleEdit = (item: MenuItem) => {
     setEditingItem(item);
+    
+    // Determine image source - if image starts with data: it's a base64 uploaded image
+    const isUploadedImage = item.image?.startsWith('data:') || false
+    
     setFormData({
       name: item.name,
       description: item.description,
@@ -288,6 +386,7 @@ export default function MenuManagement() {
       discountValue: item.discount?.value?.toString() || "",
       discountValidFrom: item.discount?.validFrom ? item.discount.validFrom.toISOString().split('T')[0] : "",
       discountValidTo: item.discount?.validTo ? item.discount.validTo.toISOString().split('T')[0] : "",
+      imageSource: isUploadedImage ? "file" : "url",
     });
     setIsEditDialogOpen(true);
   };
@@ -319,6 +418,7 @@ export default function MenuManagement() {
       discountValue: "",
       discountValidFrom: "",
       discountValidTo: "",
+      imageSource: "url",
     });
     setComboItems([]);
     setEditingItem(null);
@@ -475,16 +575,105 @@ export default function MenuManagement() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="image">Image URL</Label>
-                <Input
-                  id="image"
-                  type="url"
-                  value={formData.image}
-                  onChange={(e) =>
-                    setFormData({ ...formData, image: e.target.value })
-                  }
-                  placeholder="https://example.com/image.jpg"
-                />
+                <Label>Image</Label>
+                <div className="space-y-4">
+                  {/* Image Source Selection */}
+                  <div className="flex items-center space-x-6">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        id="imageUrl"
+                        name="imageSource"
+                        checked={formData.imageSource === 'url'}
+                        onChange={() => setFormData({ ...formData, imageSource: 'url', image: '' })}
+                      />
+                      <Label htmlFor="imageUrl">Image URL</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        id="imageFile"
+                        name="imageSource"
+                        checked={formData.imageSource === 'file'} 
+                        onChange={() => setFormData({ ...formData, imageSource: 'file', image: '' })}
+                      />
+                      <Label htmlFor="imageFile">Upload from Computer</Label>
+                    </div>
+                  </div>
+
+                  {/* URL Input */}
+                  {formData.imageSource === 'url' && (
+                    <Input
+                      id="image"
+                      type="url" 
+                      value={formData.image}
+                      onChange={(e) =>
+                        setFormData({ ...formData, image: e.target.value })
+                      }
+                      placeholder="https://example.com/image.jpg"
+                    />
+                  )}
+
+                  {/* File Upload */}
+                  {formData.imageSource === 'file' && (
+                    <div className="space-y-3">
+                      <div className="relative">
+                        <div 
+                          className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-gray-400 transition-colors"
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          {formData.image ? (
+                            <div className="space-y-2">
+                              <img 
+                                src={formData.image} 
+                                alt="Preview" 
+                                className="w-24 h-24 object-cover rounded-lg mx-auto"
+                              />
+                              <p className="text-sm text-green-600 font-medium">Image uploaded successfully!</p>
+                              <p className="text-xs text-gray-500">Click to change image</p>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              <Upload className="h-12 w-12 mx-auto text-gray-400" />
+                              <p className="text-sm font-medium text-gray-600">Click to upload image</p>
+                              <p className="text-xs text-gray-500">Max 5MB • JPG, PNG, GIF</p>
+                            </div>
+                          )}
+                          
+                          {uploadingImage && (
+                            <div className="absolute inset-0 bg-white bg-opacity-80 rounded-lg flex items-center justify-center">
+                              <div className="text-center">
+                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                                <p className="text-sm text-gray-600">Uploading...</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          className="hidden"
+                          disabled={uploadingImage}
+                        />
+                      </div>
+
+                      {formData.image && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setFormData({ ...formData, image: '' })}
+                          className="w-full"
+                        >
+                          Remove Image
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center space-x-2">
@@ -878,7 +1067,7 @@ export default function MenuManagement() {
                 id="edit-name"
                 value={formData.name}
                 onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
+                  setFormData(prev => ({ ...prev, name: e.target.value }))
                 }
                 placeholder="Enter item name"
                 required
@@ -891,7 +1080,7 @@ export default function MenuManagement() {
                 id="edit-description"
                 value={formData.description}
                 onChange={(e) =>
-                  setFormData({ ...formData, description: e.target.value })
+                  setFormData(prev => ({ ...prev, description: e.target.value }))
                 }
                 placeholder="Describe the menu item"
                 rows={3}
@@ -903,7 +1092,7 @@ export default function MenuManagement() {
               <Select
                 value={formData.category}
                 onValueChange={(value) =>
-                  setFormData({ ...formData, category: value })
+                  setFormData(prev => ({ ...prev, category: value }))
                 }
                 required
               >
@@ -929,7 +1118,7 @@ export default function MenuManagement() {
                 min="0"
                 value={formData.price}
                 onChange={(e) =>
-                  setFormData({ ...formData, price: e.target.value })
+                  setFormData(prev => ({ ...prev, price: e.target.value }))
                 }
                 placeholder="0.00"
                 required
@@ -937,16 +1126,96 @@ export default function MenuManagement() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="edit-image">Image URL</Label>
-              <Input
-                id="edit-image"
-                type="url"
-                value={formData.image}
-                onChange={(e) =>
-                  setFormData({ ...formData, image: e.target.value })
-                }
-                placeholder="https://example.com/image.jpg"
-              />
+              <Label>Image</Label>
+              <div className="space-y-4">
+                {/* Image Source Selection */}
+                <div className="flex items-center space-x-6">
+                                  <div className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    id="edit-imageUrl"
+                    name="edit-imageSource"
+                    checked={formData.imageSource === 'url'}
+                    onChange={() => setFormData(prev => ({ ...prev, imageSource: 'url' }))}
+                  />
+                  <Label htmlFor="edit-imageUrl">Image URL</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    id="edit-imageFile"
+                    name="edit-imageSource"
+                    checked={formData.imageSource === 'file'} 
+                    onChange={() => setFormData(prev => ({ ...prev, imageSource: 'file' }))}
+                  />
+                  <Label htmlFor="edit-imageFile">Upload from Computer</Label>
+                </div>
+                </div>
+
+                {/* URL Input */}
+                {formData.imageSource === 'url' && (
+                  <Input
+                    id="edit-image"
+                    type="url" 
+                    value={formData.image}
+                    onChange={(e) =>
+                      setFormData(prev => ({ ...prev, image: e.target.value }))
+                    }
+                    placeholder="https://example.com/image.jpg"
+                  />
+                )}
+
+                {/* File Upload */}
+                {formData.imageSource === 'file' && (
+                  <div className="space-y-3">
+                    <div className="relative">
+                      <div 
+                        className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-gray-400 transition-colors"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        {formData.image ? (
+                          <div className="space-y-2">
+                            <img 
+                              src={formData.image} 
+                              alt="Preview" 
+                              className="w-24 h-24 object-cover rounded-lg mx-auto"
+                            />
+                            <p className="text-sm text-green-600 font-medium">Image uploaded successfully!</p>
+                            <p className="text-xs text-gray-500">Click to change image</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <Upload className="h-12 w-12 mx-auto text-gray-400" />
+                            <p className="text-sm font-medium text-gray-600">Click to upload image</p>
+                            <p className="text-xs text-gray-500">Max 5MB • JPG, PNG, GIF</p>
+                          </div>
+                        )}
+                        
+                        {uploadingImage && (
+                          <div className="absolute inset-0 bg-white bg-opacity-80 rounded-lg flex items-center justify-center">
+                            <div className="text-center">
+                              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                              <p className="text-sm text-gray-600">Uploading...</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {formData.image && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setFormData(prev => ({ ...prev, image: '' }))}
+                        className="w-full"
+                      >
+                        Remove Image
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center space-x-2">
@@ -954,7 +1223,7 @@ export default function MenuManagement() {
                 id="edit-available"
                 checked={formData.available}
                 onCheckedChange={(checked) =>
-                  setFormData({ ...formData, available: checked })
+                  setFormData(prev => ({ ...prev, available: checked }))
                 }
               />
               <Label htmlFor="edit-available">Available for order</Label>
@@ -965,7 +1234,7 @@ export default function MenuManagement() {
                 id="edit-bestSeller"
                 checked={formData.isBestSeller}
                 onCheckedChange={(checked) =>
-                  setFormData({ ...formData, isBestSeller: checked })
+                  setFormData(prev => ({ ...prev, isBestSeller: checked }))
                 }
               />
               <Label htmlFor="edit-bestSeller">Mark as Best Seller</Label>
@@ -978,7 +1247,7 @@ export default function MenuManagement() {
                   id="edit-hasDiscount"
                   checked={formData.hasDiscount}
                   onCheckedChange={(checked) =>
-                    setFormData({ ...formData, hasDiscount: checked })
+                    setFormData(prev => ({ ...prev, hasDiscount: checked }))
                   }
                 />
                 <Label htmlFor="edit-hasDiscount">Add Discount</Label>
@@ -1222,6 +1491,15 @@ export default function MenuManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Hidden file input for image upload */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleImageUpload}
+        accept="image/*"
+        style={{ display: 'none' }}
+      />
     </div>
   );
 }

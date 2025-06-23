@@ -16,7 +16,7 @@ import {
   updateTableStatus,
   type Table,
   type Order
-} from '@/firebase/restaurant-service'
+} from '@/firebase/restaurant-service-optimized'
 import { doc, setDoc, deleteDoc, collection } from 'firebase/firestore'
 import { db } from '@/firebase/config'
 import { toast } from "sonner"
