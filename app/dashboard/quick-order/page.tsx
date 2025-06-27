@@ -33,9 +33,11 @@ import {
   subscribeToMenuItems,
   subscribeToTables,
   createOrder,
+  getRestaurantByAdminEmail,
   type MenuItem,
   type Table,
-  type OrderItem
+  type OrderItem,
+  type Restaurant
 } from '@/firebase/restaurant-service'
 import { toast } from "sonner"
 
@@ -44,9 +46,10 @@ interface CartItem extends OrderItem {
 }
 
 export default function QuickOrderPage() {
-  const { restaurantName } = useAuth()
+  const { restaurantName, user } = useAuth()
   const [menuItems, setMenuItems] = useState<MenuItem[]>([])
   const [tables, setTables] = useState<Table[]>([])
+  const [restaurant, setRestaurant] = useState<Restaurant | null>(null)
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   
@@ -73,11 +76,22 @@ export default function QuickOrderPage() {
       setTables(tableData.filter(table => !table.occupied))
     })
 
+    // Fetch restaurant data for tax settings
+    if (user?.email) {
+      getRestaurantByAdminEmail(user.email)
+        .then(restaurantData => {
+          setRestaurant(restaurantData)
+        })
+        .catch(error => {
+          console.error('Error fetching restaurant:', error)
+        })
+    }
+
     return () => {
       unsubscribeMenu()
       unsubscribeTables()
     }
-  }, [restaurantName])
+  }, [restaurantName, user?.email])
 
   const categories = ['All', ...new Set(menuItems.map(item => item.category))]
   
@@ -129,7 +143,9 @@ export default function QuickOrderPage() {
 
   const getTotalAmount = () => {
     const subtotal = cart.reduce((total, item) => total + (item.price * item.quantity), 0)
-    const tax = subtotal * 0.18 // 18% GST
+    const tax = restaurant?.taxEnabled && restaurant?.taxRate 
+      ? (subtotal * restaurant.taxRate) / 100 
+      : 0
     return subtotal + tax
   }
 
@@ -138,22 +154,39 @@ export default function QuickOrderPage() {
   }
 
   const getTax = () => {
-    return getSubtotal() * 0.18
+    const subtotal = getSubtotal()
+    return restaurant?.taxEnabled && restaurant?.taxRate 
+      ? (subtotal * restaurant.taxRate) / 100 
+      : 0
   }
 
+  // Function to generate daily order number
+  const generateDailyOrderNumber = () => {
+    const today = new Date().toDateString();
+    const storageKey = `daily_order_${restaurantName}_${today}`;
+    
+    let currentOrderNumber = parseInt(localStorage.getItem(storageKey) || '0');
+    currentOrderNumber += 1;
+    
+    localStorage.setItem(storageKey, currentOrderNumber.toString());
+    return currentOrderNumber;
+  };
+
   const handleCreateOrder = async () => {
-    if (!restaurantName || !customerName.trim() || !customerPhone.trim() || !selectedTable || cart.length === 0) {
-      toast.error('Please fill all required fields and add items to cart')
+    if (!restaurantName || cart.length === 0) {
+      toast.error('Please add items to cart before creating order')
       return
     }
 
     try {
       setCreating(true)
 
+      const dailyOrderNumber = generateDailyOrderNumber();
+
       const orderData = {
-        customerName: customerName.trim(),
-        customerPhone: customerPhone.trim(),
-        tableNumber: parseInt(selectedTable),
+        customerName: customerName.trim() || `Order #${dailyOrderNumber}`,
+        customerPhone: customerPhone.trim() || '',
+        tableNumber: selectedTable ? parseInt(selectedTable) : 0,
         items: cart.map(item => ({
           menuItemId: item.menuItemId,
           name: item.name,
@@ -164,7 +197,8 @@ export default function QuickOrderPage() {
         status: 'pending' as const,
         totalAmount: getTotalAmount(),
         notes: notes.trim(),
-        orderSource: 'quick_order' as const
+        orderSource: 'quick_order' as const,
+        dailyOrderNumber: dailyOrderNumber
       }
 
       await createOrder(restaurantName, orderData)
@@ -176,7 +210,7 @@ export default function QuickOrderPage() {
       setNotes('')
       setCart([])
       
-      toast.success('Order created successfully!')
+      toast.success(`Order #${dailyOrderNumber} created successfully!`)
     } catch (error) {
       console.error('Error creating order:', error)
       toast.error('Failed to create order')
@@ -397,35 +431,38 @@ export default function QuickOrderPage() {
                 <User className="h-4 w-4 sm:h-5 sm:w-5" />
                 <span>Customer Details</span>
               </CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                All fields are optional. Orders get auto-numbered daily (1, 2, 3...).
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 sm:space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name" className="text-sm">Customer Name *</Label>
+                <Label htmlFor="name" className="text-sm">Customer Name (Optional)</Label>
                 <Input
                   id="name"
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="Enter customer name"
+                  placeholder="Enter customer name (optional)"
                   className="text-sm sm:text-base"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="phone" className="text-sm">Phone Number *</Label>
+                <Label htmlFor="phone" className="text-sm">Phone Number (Optional)</Label>
                 <Input
                   id="phone"
                   value={customerPhone}
                   onChange={(e) => setCustomerPhone(e.target.value)}
-                  placeholder="Enter phone number"
+                  placeholder="Enter phone number (optional)"
                   className="text-sm sm:text-base"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="table" className="text-sm">Table Selection *</Label>
+                <Label htmlFor="table" className="text-sm">Table Selection (Optional)</Label>
                 <Select value={selectedTable} onValueChange={setSelectedTable}>
                   <SelectTrigger className="text-sm sm:text-base">
-                    <SelectValue placeholder="Select table option" />
+                    <SelectValue placeholder="Select table (optional)" />
                   </SelectTrigger>
                   <SelectContent>
                     {tables.length === 0 ? (
@@ -547,7 +584,7 @@ export default function QuickOrderPage() {
 
                   <Button 
                     onClick={handleCreateOrder}
-                    disabled={creating || !customerName || !customerPhone || !selectedTable}
+                    disabled={creating || cart.length === 0}
                     className="w-full mt-3 sm:mt-4 text-sm sm:text-base h-10 sm:h-11"
                   >
                     {creating ? (

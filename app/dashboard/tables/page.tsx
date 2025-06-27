@@ -399,7 +399,7 @@ export default function TablesPage() {
 
       {/* Order Details Dialog */}
       <OrderDetailsDialog
-        order={selectedOrder}
+        order={selectedOrder} 
         isOpen={isOrderDialogOpen}
         onClose={() => {
           setIsOrderDialogOpen(false)

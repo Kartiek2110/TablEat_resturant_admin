@@ -54,6 +54,7 @@ import {
   Star,
   Package,
   Upload,
+  Search,
 } from "lucide-react";
 import {
   subscribeToMenuItems,
@@ -86,6 +87,7 @@ export default function MenuManagement() {
   const [newlyCreatedItem, setNewlyCreatedItem] = useState<MenuItem | null>(null);
   const [ingredients, setIngredients] = useState<MenuItemIngredient[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     name: "",
@@ -474,6 +476,17 @@ export default function MenuManagement() {
     setIngredients([]);
   };
 
+  // Filter menu items based on search term
+  const filteredMenuItems = menuItems.filter((item) => {
+    if (!searchTerm) return true;
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      item.name.toLowerCase().includes(searchLower) ||
+      item.description.toLowerCase().includes(searchLower) ||
+      item.category.toLowerCase().includes(searchLower)
+    );
+  });
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -486,20 +499,31 @@ export default function MenuManagement() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6 p-4 md:p-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Menu Management</h1>
-          <p className="text-muted-foreground">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="flex-1">
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Menu Management</h1>
+          <p className="text-sm md:text-base text-muted-foreground mt-1">
             Manage your restaurant's menu items, categories, and pricing
           </p>
         </div>
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+          {/* Search Bar */}
+          <div className="relative flex-1 sm:w-80">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              placeholder="Search menu items..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 h-10 md:h-12 text-sm md:text-base"
+            />
+        </div>
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={resetForm}>
+              <Button onClick={resetForm} className="h-10 md:h-12 px-4 md:px-6 text-sm md:text-base whitespace-nowrap">
               <Plus className="h-4 w-4 mr-2" />
-              Add Menu Item
+                Add Item
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
@@ -649,15 +673,6 @@ export default function MenuManagement() {
                             </div>
                           )}
                         </div>
-                        
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept="image/*"
-                          onChange={handleImageUpload}
-                          className="hidden"
-                          disabled={uploadingImage}
-                        />
                       </div>
 
                       {formData.image && (
@@ -849,10 +864,11 @@ export default function MenuManagement() {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Menu Statistics */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Items</CardTitle>
@@ -904,11 +920,25 @@ export default function MenuManagement() {
       <Card>
         <CardHeader>
           <CardTitle>Menu Items</CardTitle>
-          <CardDescription>Manage your restaurant's menu items</CardDescription>
+          <CardDescription>
+            {searchTerm ? `Found ${filteredMenuItems.length} items matching "${searchTerm}"` : 'Manage your restaurant\'s menu items'}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {menuItems.length === 0 ? (
+          {filteredMenuItems.length === 0 ? (
             <div className="text-center py-12">
+              {searchTerm ? (
+                <>
+                  <Search className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    No items found
+                  </h3>
+                  <p className="text-gray-500 mb-6">
+                    Try a different search term or add a new menu item
+                  </p>
+                </>
+              ) : (
+                <>
               <ChefHat className="h-16 w-16 mx-auto mb-4 text-gray-300" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">
                 No menu items yet
@@ -916,48 +946,52 @@ export default function MenuManagement() {
               <p className="text-gray-500 mb-6">
                 Start building your menu by adding your first item
               </p>
+                </>
+              )}
               <Button onClick={() => setIsAddDialogOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add First Item
               </Button>
             </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {menuItems.map((item) => (
+            <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+              {filteredMenuItems.map((item) => (
                 <Card key={item.id} className="relative">
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <CardTitle className="text-lg">{item.name}</CardTitle>
+                      <div className="space-y-1 flex-1">
+                        <CardTitle className="text-base md:text-lg line-clamp-1">{item.name}</CardTitle>
                         <div className="flex flex-wrap gap-1">
                           <Badge
                             variant={item.available ? "default" : "secondary"}
+                            className="text-xs"
                           >
                             {item.available ? "Available" : "Unavailable"}
                           </Badge>
                           {item.isBestSeller && (
-                            <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+                            <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 text-xs">
                               ⭐ Best Seller
                             </Badge>
                           )}
                           {item.isCombo && (
-                            <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                            <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 text-xs">
                               🍽️ Combo
                             </Badge>
                           )}
                         </div>
                       </div>
-                      <div className="flex space-x-1">
+                      <div className="flex space-x-1 ml-2">
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleEdit(item)}
+                          className="h-8 w-8 p-0"
                         >
                           <Edit2 className="h-4 w-4" />
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm">
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </AlertDialogTrigger>
@@ -1000,28 +1034,28 @@ export default function MenuManagement() {
                       </div>
                     )}
                     <div>
-                      <p className="text-sm text-gray-600 mb-2">
+                      <p className="text-sm text-gray-600 mb-2 line-clamp-2">
                         {item.description}
                       </p>
                       <div className="flex flex-wrap gap-2 mb-3">
                         {item.isCombo && (
-                          <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                          <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 text-xs">
                             🍽️ Combo
                           </Badge>
                         )}
                         {item.isBestSeller && (
-                          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+                          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 text-xs">
                             ⭐ Best Seller
                           </Badge>
                         )}
                         {getDiscountDisplayText(item) && (
-                          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 text-xs">
                             🏷️ {getDiscountDisplayText(item)}
                           </Badge>
                         )}
                       </div>
                       <div className="flex items-center justify-between">
-                        <Badge variant="outline">{item.category}</Badge>
+                        <Badge variant="outline" className="text-xs">{item.category}</Badge>
                         <div className="text-right">
                           {(() => {
                             const { originalPrice, discountedPrice, hasDiscount } = calculateDiscountedPrice(item)
@@ -1130,26 +1164,26 @@ export default function MenuManagement() {
               <div className="space-y-4">
                 {/* Image Source Selection */}
                 <div className="flex items-center space-x-6">
-                                  <div className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    id="edit-imageUrl"
-                    name="edit-imageSource"
-                    checked={formData.imageSource === 'url'}
-                    onChange={() => setFormData(prev => ({ ...prev, imageSource: 'url' }))}
-                  />
-                  <Label htmlFor="edit-imageUrl">Image URL</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    id="edit-imageFile"
-                    name="edit-imageSource"
-                    checked={formData.imageSource === 'file'} 
-                    onChange={() => setFormData(prev => ({ ...prev, imageSource: 'file' }))}
-                  />
-                  <Label htmlFor="edit-imageFile">Upload from Computer</Label>
-                </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      id="edit-imageUrl"
+                      name="edit-imageSource"
+                      checked={formData.imageSource === 'url'}
+                      onChange={() => setFormData(prev => ({ ...prev, imageSource: 'url' }))}
+                    />
+                    <Label htmlFor="edit-imageUrl">Image URL</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      id="edit-imageFile"
+                      name="edit-imageSource"
+                      checked={formData.imageSource === 'file'} 
+                      onChange={() => setFormData(prev => ({ ...prev, imageSource: 'file' }))}
+                    />
+                    <Label htmlFor="edit-imageFile">Upload from Computer</Label>
+                  </div>
                 </div>
 
                 {/* URL Input */}

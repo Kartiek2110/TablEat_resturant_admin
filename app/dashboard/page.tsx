@@ -36,7 +36,7 @@ import { NotificationList } from '@/components/notification-list'
 import { toast } from 'sonner'
 
 export default function Dashboard() {
-  const { user, restaurantName } = useAuth()
+  const { user, restaurantName, setupCompleted } = useAuth()
   const { orders, pendingOrders } = useNotifications()
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null)
   const [tables, setTables] = useState<Table[]>([])
@@ -52,9 +52,17 @@ export default function Dashboard() {
     menu?: () => void
   }>({})
 
+  // Redirect to setup if not completed
+  useEffect(() => {
+    if (user && !setupCompleted) {
+      window.location.href = '/setup'
+      return
+    }
+  }, [user, setupCompleted])
+
   // Optimized initialization with reduced subscriptions
   useEffect(() => {
-    if (!user?.email || !restaurantName) return
+    if (!user?.email || !restaurantName || !setupCompleted) return
 
     const initializeRestaurant = async () => {
       try {

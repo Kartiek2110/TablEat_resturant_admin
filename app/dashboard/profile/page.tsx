@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { UserCircle, Building, Mail, Phone, MapPin, Clock, Upload, Camera, X, Settings } from "lucide-react"
+import { UserCircle, Building, Mail, Phone, MapPin, Clock, Upload, Camera, X, Settings, Calculator } from "lucide-react"
 import {
   getRestaurantByAdminEmail,
   updateRestaurantBanner,
@@ -18,9 +18,10 @@ import { db } from '@/firebase/config'
 import SubscriptionStatus from '@/components/SubscriptionStatus'
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
 
 export default function ProfilePage() {
-  const { user, restaurantName } = useAuth()
+  const { user, restaurantName, refreshRestaurant } = useAuth()
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -31,7 +32,10 @@ export default function ProfilePage() {
     description: '',
     address: '',
     phone: '',
-    email: ''
+    email: '',
+    adminPhone: '',
+    taxEnabled: false,
+    taxRate: 0
   })
 
   useEffect(() => {
@@ -46,7 +50,10 @@ export default function ProfilePage() {
               description: restaurantData.description || '',
               address: restaurantData.address || '',
               phone: restaurantData.phone || '',
-              email: restaurantData.adminEmail || ''
+              email: restaurantData.adminEmail || '',
+              adminPhone: restaurantData.adminPhone || '',
+              taxEnabled: restaurantData.taxEnabled || false,
+              taxRate: restaurantData.taxRate || 0
             })
           }
         } catch (error) {
@@ -71,6 +78,9 @@ export default function ProfilePage() {
         description: formData.description,
         address: formData.address,
         phone: formData.phone,
+        adminPhone: formData.adminPhone,
+        taxEnabled: formData.taxEnabled,
+        taxRate: formData.taxRate,
         updatedAt: new Date()
       })
       
@@ -80,8 +90,14 @@ export default function ProfilePage() {
         name: formData.name,
         description: formData.description,
         address: formData.address,
-        phone: formData.phone
+        phone: formData.phone,
+        adminPhone: formData.adminPhone,
+        taxEnabled: formData.taxEnabled,
+        taxRate: formData.taxRate
       })
+      
+      // Refresh restaurant data in AuthContext so other components get the updated data
+      await refreshRestaurant()
       
       toast.success('Profile updated successfully!')
     } catch (error) {
@@ -160,12 +176,12 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6 p-4 md:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Restaurant Profile</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Restaurant Profile</h1>
+          <p className="text-sm md:text-base text-muted-foreground">
             Manage your restaurant information and subscription
           </p>
         </div>
@@ -258,7 +274,7 @@ export default function ProfilePage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-4 md:gap-6 lg:grid-cols-2">
         {/* Restaurant Information */}
         <Card>
           <CardHeader>
@@ -278,6 +294,7 @@ export default function ProfilePage() {
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="Enter restaurant name"
+                className="h-10 md:h-12 text-sm md:text-base"
               />
             </div>
 
@@ -289,6 +306,7 @@ export default function ProfilePage() {
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 placeholder="Describe your restaurant"
                 rows={3}
+                className="text-sm md:text-base resize-none"
               />
             </div>
 
@@ -300,6 +318,7 @@ export default function ProfilePage() {
                 onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                 placeholder="Enter restaurant address"
                 rows={2}
+                className="text-sm md:text-base resize-none"
               />
             </div>
 
@@ -310,7 +329,22 @@ export default function ProfilePage() {
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 placeholder="Enter phone number"
+                className="h-10 md:h-12 text-sm md:text-base"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="adminPhone">Admin WhatsApp Number</Label>
+              <Input
+                id="adminPhone"
+                value={formData.adminPhone}
+                onChange={(e) => setFormData({ ...formData, adminPhone: e.target.value })}
+                placeholder="Enter WhatsApp number (e.g., +919876543210)"
+                className="h-10 md:h-12 text-sm md:text-base"
+              />
+              <p className="text-xs text-muted-foreground">
+                This number will be used to send e-bills via WhatsApp
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -319,7 +353,7 @@ export default function ProfilePage() {
                 id="email"
                 value={formData.email}
                 disabled
-                className="bg-gray-50"
+                className="bg-gray-50 h-10 md:h-12 text-sm md:text-base"
               />
               <p className="text-xs text-muted-foreground">
                 Email cannot be changed after registration
@@ -329,7 +363,7 @@ export default function ProfilePage() {
             <Button 
               onClick={handleSave} 
               disabled={saving}
-              className="w-full"
+              className="w-full h-10 md:h-12 text-sm md:text-base"
             >
               {saving ? 'Saving...' : 'Save Changes'}
             </Button>
@@ -412,6 +446,76 @@ export default function ProfilePage() {
                   <strong>Note:</strong> Contact support to enable additional features. Some features may require subscription upgrades.
                 </p>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Tax Settings */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <Calculator className="h-5 w-5" />
+                <span>Tax Settings</span>
+              </CardTitle>
+              <CardDescription>
+                Configure tax settings for your menu prices
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-base">Enable Tax</Label>
+                  <div className="text-sm text-muted-foreground">
+                    Add tax to menu item prices
+                  </div>
+                </div>
+                <Switch
+                  checked={formData.taxEnabled}
+                  onCheckedChange={(checked) =>
+                    setFormData({ ...formData, taxEnabled: checked })
+                  }
+                />
+              </div>
+
+              {formData.taxEnabled && (
+                <div className="space-y-2">
+                  <Label htmlFor="taxRate">Tax Rate (%)</Label>
+                  <Input
+                    id="taxRate"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    value={formData.taxRate}
+                    onChange={(e) =>
+                      setFormData({ 
+                        ...formData, 
+                        taxRate: parseFloat(e.target.value) || 0 
+                      })
+                    }
+                    placeholder="Enter tax rate (e.g., 18 for 18%)"
+                    className="h-10 md:h-12 text-sm md:text-base"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Common rates: GST 5%, 12%, 18%, or 28%
+                  </p>
+                </div>
+              )}
+
+              {formData.taxEnabled && formData.taxRate > 0 && (
+                <div className="mt-4 p-3 bg-green-50 rounded-lg">
+                  <p className="text-sm text-green-800">
+                    <strong>Example:</strong> ₹100 item will be displayed as ₹{(100 + (100 * formData.taxRate / 100)).toFixed(2)} (including {formData.taxRate}% tax)
+                  </p>
+                </div>
+              )}
+
+              <Button 
+                onClick={handleSave} 
+                disabled={saving}
+                className="w-full h-10 md:h-12 text-sm md:text-base"
+              >
+                {saving ? 'Saving...' : 'Save Tax Settings'}
+              </Button>
             </CardContent>
           </Card>
         </div>

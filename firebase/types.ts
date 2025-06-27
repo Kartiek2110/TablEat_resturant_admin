@@ -3,6 +3,7 @@ export interface Restaurant {
   id: string
   name: string
   adminEmail: string
+  adminPhone?: string
   createdAt: Date
   updatedAt: Date
   address?: string
@@ -13,6 +14,7 @@ export interface Restaurant {
   subscriptionEnd: Date
   subscriptionStatus: 'active' | 'expired' | 'trial'
   staff_management_code?: string
+  inventory_management_code?: string
   inventory_management_approved?: boolean
   staff_management_approved?: boolean
   quick_order_approved: boolean
@@ -20,6 +22,9 @@ export interface Restaurant {
   customer_approved: boolean
   restaurant_open: boolean
   banner_image?: string
+  // Tax settings
+  taxEnabled?: boolean
+  taxRate?: number
 }
 
 export interface MenuItem {
@@ -64,14 +69,15 @@ export interface Order {
   id: string
   tableNumber: number
   customerName: string
-  customerPhone?: string
+  customerPhone: string
   items: OrderItem[]
   status: 'pending' | 'preparing' | 'ready' | 'served' | 'cancelled'
   totalAmount: number
   createdAt: Date
   updatedAt: Date
   notes?: string
-  orderSource: 'quick_order' | 'direct_order'
+  orderSource: 'qr_code' | 'quick_order' | 'walk_in' | 'direct_order'
+  dailyOrderNumber?: number
   paymentMethod?: 'cash' | 'card' | 'upi' | 'other'
   statusHistory?: {
     status: Order['status']

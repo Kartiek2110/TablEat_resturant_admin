@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Search, ShoppingCart, DollarSign, TrendingUp, Clock, AlertTriangle, CheckCircle, User, XCircle, Download } from "lucide-react"
-import { updateOrderStatus, type Order } from '@/firebase/restaurant-service'
+import { updateOrderStatus, type Order } from '@/firebase/restaurant-service-optimized'
 import { useAuth } from '@/contexts/AuthContext'
 import OrderDetailsDialog from '@/components/OrderDetailsDialog'
 import { toast } from 'sonner'

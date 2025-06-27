@@ -23,6 +23,7 @@ export interface Restaurant {
   id: string
   name: string
   adminEmail: string
+  adminPhone?: string
   createdAt: Date
   updatedAt: Date
   address?: string
@@ -33,6 +34,7 @@ export interface Restaurant {
   subscriptionEnd: Date
   subscriptionStatus: 'active' | 'expired' | 'trial'
   staff_management_code?: string
+  inventory_management_code?: string
   inventory_management_approved?: boolean
   staff_management_approved?: boolean
   // New permission fields
@@ -41,6 +43,9 @@ export interface Restaurant {
   customer_approved: boolean
   restaurant_open: boolean
   banner_image?: string
+  // Tax settings
+  taxEnabled?: boolean
+  taxRate?: number
 }
 
 export interface MenuItem {
@@ -83,21 +88,22 @@ export interface Table {
 
 export interface Order {
   id: string
-  tableNumber: number
   customerName: string
-  customerPhone?: string
+  customerPhone: string
+  tableNumber: number
   items: OrderItem[]
   status: 'pending' | 'preparing' | 'ready' | 'served' | 'cancelled'
   totalAmount: number
+  notes?: string
   createdAt: Date
   updatedAt: Date
-  notes?: string
-  orderSource: 'quick_order' | 'direct_order' // Track order source
-  paymentMethod?: 'cash' | 'card' | 'upi' | 'other' // Track payment method
+  orderSource: 'qr_code' | 'quick_order' | 'walk_in' | 'direct_order'
+  dailyOrderNumber?: number
+  paymentMethod?: 'cash' | 'card' | 'upi' | 'other'
   statusHistory?: {
     status: Order['status']
     timestamp: Date
-    duration?: number // time in minutes from previous status
+    duration?: number
   }[]
 }
 
@@ -225,6 +231,7 @@ export async function createRestaurant(name: string, adminEmail: string): Promis
       subscriptionEnd,
       subscriptionStatus: 'active',
       staff_management_code: '1234', // Default staff code
+      inventory_management_code: '5678', // Default inventory code
       inventory_management_approved: false, // Initially false
       staff_management_approved: false, // Initially false
       quick_order_approved: false, // Initially false
@@ -1378,6 +1385,32 @@ export async function verifyStaffManagementCode(restaurantName: string, code: st
     return restaurant?.staff_management_code === code
   } catch (error) {
     console.error('Error verifying staff management code:', error)
+    return false
+  }
+}
+
+// ============ INVENTORY MANAGEMENT CODE FUNCTIONS ============
+
+export async function setInventoryManagementCode(restaurantName: string, code: string): Promise<void> {
+  try {
+    const restaurantId = getRestaurantCollectionName(restaurantName)
+    await updateDoc(doc(db, 'restaurants', restaurantId), {
+      inventory_management_code: code,
+      updatedAt: serverTimestamp()
+    })
+   
+  } catch (error) {
+    console.error('Error updating inventory management code:', error)
+    throw new Error('Failed to update inventory management code')
+  }
+}
+
+export async function verifyInventoryManagementCode(restaurantName: string, code: string): Promise<boolean> {
+  try {
+    const restaurant = await getRestaurant(restaurantName)
+    return restaurant?.inventory_management_code === code
+  } catch (error) {
+    console.error('Error verifying inventory management code:', error)
     return false
   }
 }

@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Edit2, Trash2, Package, AlertTriangle, Crown, Lock, TrendingDown, TrendingUp } from "lucide-react"
+import { Plus, Edit2, Trash2, Package, AlertTriangle, Crown, Lock, TrendingDown, TrendingUp, Shield, Eye, EyeOff } from "lucide-react"
 import { 
   subscribeToInventoryItems, 
   addInventoryItem, 
@@ -22,6 +22,7 @@ import {
   updateMenuItemIngredients,
   getRestaurantByAdminEmail,
   checkPremiumSubscription,
+  verifyInventoryManagementCode,
   type InventoryItem,
   type MenuItem,
   type MenuItemIngredient,
@@ -35,6 +36,10 @@ export default function InventoryManagement() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([])
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isAuthorized, setIsAuthorized] = useState(false)
+  const [authCode, setAuthCode] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [authLoading, setAuthLoading] = useState(false)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
@@ -61,12 +66,18 @@ export default function InventoryManagement() {
       if (user?.email) {
         const restaurantData = await getRestaurantByAdminEmail(user.email)
         setRestaurant(restaurantData)
-        
-        // Only subscribe to collections if approved
-        if (restaurantData?.inventory_management_approved === true) {
+        setLoading(false)
+      }
+    }
+    
+    fetchRestaurant()
+  }, [restaurantName, user?.email])
+
+  useEffect(() => {
+    if (!restaurantName || !isAuthorized || !restaurant?.inventory_management_approved) return
+
           const unsubscribeInventory = subscribeToInventoryItems(restaurantName, (items) => {
             setInventoryItems(items)
-            setLoading(false)
           })
 
           const unsubscribeMenu = subscribeToMenuItems(restaurantName, (items) => {
@@ -77,17 +88,31 @@ export default function InventoryManagement() {
             unsubscribeInventory()
             unsubscribeMenu()
           }
-        } else {
-          setLoading(false)
-        }
-      }
-    }
-    
-    fetchRestaurant()
-  }, [restaurantName, user?.email])
+  }, [restaurantName, isAuthorized, restaurant?.inventory_management_approved])
 
   const isPremium = restaurant ? checkPremiumSubscription(restaurant) : false
   const isInventoryApproved = restaurant?.inventory_management_approved === true
+
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!restaurantName) return
+
+    setAuthLoading(true)
+    try {
+      const isValid = await verifyInventoryManagementCode(restaurantName, authCode)
+      if (isValid) {
+        setIsAuthorized(true)
+        toast.success("Access granted!")
+      } else {
+        toast.error("Invalid access code")
+      }
+    } catch (error) {
+      console.error('Error verifying code:', error)
+      toast.error("Failed to verify access code")
+    } finally {
+      setAuthLoading(false)
+    }
+  }
 
   // Show access denied if not approved
   if (!loading && restaurant && !isInventoryApproved) {
@@ -107,6 +132,59 @@ export default function InventoryManagement() {
             <p className="text-muted-foreground">
               Please contact support to enable inventory management features for your restaurant.
             </p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Show code verification if approved but not authorized
+  if (!loading && restaurant && isInventoryApproved && !isAuthorized) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="mx-auto w-16 h-16 bg-gradient-to-br from-green-100 to-blue-100 rounded-full flex items-center justify-center mb-4">
+              <Shield className="h-8 w-8 text-green-600" />
+            </div>
+            <CardTitle>Inventory Management Access</CardTitle>
+            <CardDescription>
+              Enter the access code to manage inventory and stock levels
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleAuthSubmit} className="space-y-4">
+              <div>
+                <Label htmlFor="authCode">Access Code</Label>
+                <div className="relative">
+                  <Input
+                    id="authCode"
+                    type={showPassword ? "text" : "password"}
+                    value={authCode}
+                    onChange={(e) => setAuthCode(e.target.value)}
+                    placeholder="Enter access code"
+                    required
+                    className="pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+              <Button type="submit" className="w-full" disabled={authLoading}>
+                {authLoading ? "Verifying..." : "Access Inventory Management"}
+              </Button>
+            </form>
           </CardContent>
         </Card>
       </div>

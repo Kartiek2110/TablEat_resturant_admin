@@ -1,16 +1,26 @@
 'use client'
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { User } from 'firebase/auth'
+import { User, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail } from 'firebase/auth'
 import { useRouter } from 'next/navigation'
-import { onAuthStateChange, firebaseSignIn, firebaseSignOut, extractRestaurantName } from '../firebase/auth'
+import { onAuthStateChange, firebaseSignIn, firebaseSignOut, extractRestaurantName, completeRestaurantSetup } from '../firebase/auth'
+import { doc, getDoc } from 'firebase/firestore'
+import { db } from '../firebase/config'
+import { getRestaurantByAdminEmail, type Restaurant } from '../firebase/restaurant-service'
+import { auth } from '../firebase/config'
 
 interface AuthContextType {
   user: User | null
   loading: boolean
-  restaurantName: string | null
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
   logout: () => Promise<void>
+  createAccount: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
+  resetPassword: (email: string) => Promise<void>
+  restaurantName: string | null
+  restaurant: Restaurant | null
+  setupCompleted: boolean
+  completeSetup: (restaurantName: string) => Promise<{ success: boolean; error?: string }>
+  refreshRestaurant: () => Promise<void>
   isAuthenticated: boolean
 }
 
@@ -20,6 +30,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [restaurantName, setRestaurantName] = useState<string | null>(null)
+  const [restaurant, setRestaurant] = useState<Restaurant | null>(null)
+  const [setupCompleted, setSetupCompleted] = useState(false)
   const [mounted, setMounted] = useState(false)
   const router = useRouter()
 
@@ -31,9 +43,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!mounted) return // Don't run on server
 
-    const unsubscribe = onAuthStateChange((user, restaurantName) => {
+    const unsubscribe = onAuthStateChange(async (user, restaurantName) => {
       setUser(user)
-      setRestaurantName(restaurantName || null)
+      
+      if (user && db) {
+        try {
+          // Check user's setup status
+          const adminDoc = await getDoc(doc(db, 'admins', user.uid))
+          if (adminDoc.exists()) {
+            const adminData = adminDoc.data()
+            setSetupCompleted(adminData.setupCompleted || false)
+            setRestaurantName(adminData.restaurantName || null)
+          } else {
+            setSetupCompleted(false)
+            setRestaurantName(null)
+          }
+        } catch (error) {
+          console.error('Error fetching user data:', error)
+          setSetupCompleted(false)
+          setRestaurantName(restaurantName || null)
+        }
+      } else {
+        setSetupCompleted(false)
+        setRestaurantName(null)
+      }
+      
       setLoading(false)
     })
 
@@ -63,6 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await firebaseSignOut()
       setUser(null)
       setRestaurantName(null)
+      setSetupCompleted(false)
       router.push('/login')
     } catch (error) {
       console.error('Logout error:', error)
@@ -71,12 +106,70 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const completeSetup = async (restaurantName: string) => {
+    if (!user) return { success: false, error: 'User not authenticated' }
+    
+    setLoading(true)
+    try {
+      const result = await completeRestaurantSetup(user.uid, restaurantName)
+      if (result.success) {
+        setRestaurantName(restaurantName.replace(/[^a-zA-Z0-9_\s]/g, '').replace(/\s+/g, '_').toUpperCase())
+        setSetupCompleted(true)
+      }
+      return result
+    } catch (error) {
+      return { success: false, error: 'Setup failed. Please try again.' }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Create account wrapper
+  const createAccount = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await createUserWithEmailAndPassword(auth, email, password)
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  }
+
+  // Reset password wrapper
+  const resetPassword = async (email: string): Promise<void> => {
+    await sendPasswordResetEmail(auth, email)
+  }
+
+  // Function to refresh restaurant data
+  const refreshRestaurant = async () => {
+    if (user?.email) {
+      try {
+        const restaurantData = await getRestaurantByAdminEmail(user.email)
+        setRestaurant(restaurantData)
+      } catch (error) {
+        console.warn('Could not load restaurant data:', error)
+      }
+    } else {
+      setRestaurant(null)
+    }
+  }
+
+  // Load restaurant data when user changes
+  useEffect(() => {
+    refreshRestaurant()
+  }, [user])
+
   const value: AuthContextType = {
     user,
     loading,
     restaurantName,
+    restaurant,
+    setupCompleted,
     login,
     logout,
+    createAccount,
+    resetPassword,
+    completeSetup,
+    refreshRestaurant,
     isAuthenticated: !!user,
   }
 

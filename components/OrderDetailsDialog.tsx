@@ -1,106 +1,243 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogHeader, 
-  DialogTitle 
-} from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { 
+import { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
-import { 
-  User, 
-  Phone, 
-  MapPin, 
-  Clock, 
+} from "@/components/ui/select";
+import {
+  User,
+  Phone,
+  MapPin,
+  Clock,
   ShoppingCart,
   Receipt,
   CreditCard,
   Printer,
   CheckCircle,
   DollarSign,
-  Calendar
-} from "lucide-react"
-import { updateOrderStatus, updateTableStatus, type Order } from '@/firebase/restaurant-service'
-import { useAuth } from '@/contexts/AuthContext'
-import { toast } from 'sonner'
+  Calendar,
+  MessageCircle,
+} from "lucide-react";
+import {
+  updateOrderStatus,
+  updateTableStatus,
+  type Order,
+} from "@/firebase/restaurant-service-optimized";
+import { whatsappService } from "@/lib/whatsapp-api";
+import { PDFGenerator } from "@/lib/pdf-generator";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface OrderDetailsDialogProps {
-  order: Order | null
-  isOpen: boolean
-  onClose: () => void
+  order: Order | null;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
-export default function OrderDetailsDialog({ order, isOpen, onClose }: OrderDetailsDialogProps) {
-  const { restaurantName } = useAuth()
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'upi'>('cash')
+export default function OrderDetailsDialog({
+  order,
+  isOpen,
+  onClose,
+}: OrderDetailsDialogProps) {
+  const { restaurantName, restaurant } = useAuth();
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "upi">(
+    "cash"
+  );
+  const [showPhoneDialog, setShowPhoneDialog] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState("");
 
-  if (!order) return null
+  if (!order) return null;
 
-  const getStatusColor = (status: Order['status']) => {
+  const getStatusColor = (status: Order["status"]) => {
     switch (status) {
-      case 'pending': return 'bg-yellow-100 text-yellow-800'
-      case 'preparing': return 'bg-blue-100 text-blue-800'
-      case 'ready': return 'bg-green-100 text-green-800'
-      case 'served': return 'bg-gray-100 text-gray-800'
-      case 'cancelled': return 'bg-red-100 text-red-800'
-      default: return 'bg-gray-100 text-gray-800'
+      case "pending":
+        return "bg-yellow-100 text-yellow-800";
+      case "preparing":
+        return "bg-blue-100 text-blue-800";
+      case "ready":
+        return "bg-green-100 text-green-800";
+      case "served":
+        return "bg-gray-100 text-gray-800";
+      case "cancelled":
+        return "bg-red-100 text-red-800";
+      default:
+        return "bg-gray-100 text-gray-800";
     }
-  }
+  };
 
-  const handleStatusUpdate = async (newStatus: Order['status']) => {
-    if (!restaurantName) return
-    
-    setIsProcessing(true)
+  const handleStatusUpdate = async (newStatus: Order["status"]) => {
+    if (!restaurantName) return;
+
+    setIsProcessing(true);
     try {
-      await updateOrderStatus(restaurantName, order.id, newStatus)
-      
+      await updateOrderStatus(restaurantName, order.id, newStatus);
+
       // If order is served, free up the table
-      if (newStatus === 'served') {
-        await updateTableStatus(restaurantName, order.tableNumber, false)
+      if (newStatus === "served") {
+        await updateTableStatus(restaurantName, order.tableNumber, false);
       }
-      
-      toast.success(`Order status updated to ${newStatus}`)
+
+      toast.success(`Order status updated to ${newStatus}`);
     } catch (error) {
-      console.error('Error updating order status:', error)
-      toast.error('Failed to update order status')
+      console.error("Error updating order status:", error);
+      toast.error("Failed to update order status");
     } finally {
-      setIsProcessing(false)
+      setIsProcessing(false);
     }
-  }
+  };
 
   const handleCheckout = async () => {
-    if (!restaurantName) return
-    
-    setIsProcessing(true)
+    if (!restaurantName) return;
+
+    setIsProcessing(true);
     try {
       // Update order status to served
-      await updateOrderStatus(restaurantName, order.id, 'served')
-      
+      await updateOrderStatus(restaurantName, order.id, "served");
+
       // Free up the table
-      await updateTableStatus(restaurantName, order.tableNumber, false)
-      
-      toast.success('Order completed successfully! 🎉')
-      onClose()
+      await updateTableStatus(restaurantName, order.tableNumber, false);
+
+      toast.success("Order completed successfully! 🎉");
+      onClose();
     } catch (error) {
-      console.error('Error completing checkout:', error)
-      toast.error('Failed to complete checkout')
+      console.error("Error completing checkout:", error);
+      toast.error("Failed to complete checkout");
     } finally {
-      setIsProcessing(false)
+      setIsProcessing(false);
     }
-  }
+  };
+
+  const generateBillMessage = (order: any) => {
+    const restaurantNameFormatted =
+      restaurantName?.replace(/_/g, " ") || "Restaurant";
+    const itemsList = order.items
+      .map(
+        (item: any) =>
+          `${item.quantity}x ${item.name} - ₹${(
+            item.price * item.quantity
+          ).toFixed(2)}`
+      )
+      .join("\n");
+
+    // Calculate tax only if enabled
+    const taxAmount = restaurant?.taxEnabled 
+      ? (order.totalAmount * (restaurant?.taxRate || 0)) / 100 
+      : 0;
+    const totalWithTax = order.totalAmount + taxAmount;
+
+    const taxLine = restaurant?.taxEnabled && restaurant?.taxRate && restaurant.taxRate > 0
+      ? `🏷️ Tax (${restaurant.taxRate}%): ₹${taxAmount.toFixed(2)}\n━━━━━━━━━━━━━━━━\n`
+      : '';
+
+    return `🧾 *E-BILL* - ${restaurantNameFormatted}
+━━━━━━━━━━━━━━━━
+📅 Date: ${new Date().toLocaleDateString()}
+🕐 Time: ${new Date().toLocaleTimeString()}
+👤 Customer: ${order.customerName || "Walk-in Customer"}
+🪑 Table: ${order.tableNumber || "N/A"}
+🆔 Order ID: #${order.id.slice(-6)}
+
+📋 *ORDER DETAILS:*
+${itemsList}
+━━━━━━━━━━━━━━━━
+💰 Subtotal: ₹${order.totalAmount.toFixed(2)}
+${taxLine}💵 *TOTAL AMOUNT: ₹${totalWithTax.toFixed(2)}*
+💳 Payment: ${paymentMethod.toUpperCase()}
+
+Thank you for dining with us! 🙏
+Visit us again soon! ✨
+
+Powered by TablEat 🍽️`;
+  };
+
+  const handleWhatsAppBill = async () => {
+    // Check if customer has phone number
+    if (!order.customerPhone || order.customerPhone.trim() === '') {
+      toast.error(
+        "Customer phone number not available. Please add customer phone number to send e-bill."
+      );
+      return;
+    }
+
+    try {
+      toast.info("Sending e-bill to customer...", { duration: 2000 });
+
+      // Check if WhatsApp API is configured
+      if (whatsappService.isConfigured()) {
+        // Method 1: Send PDF bill via API
+        try {
+          const billData = {
+            order,
+            restaurantName: restaurantName || "Restaurant",
+            restaurantAddress: restaurant?.address,
+            restaurantPhone: restaurant?.phone,
+            taxRate: restaurant?.taxRate,
+            taxEnabled: restaurant?.taxEnabled
+          };
+
+          // Generate PDF bill
+          const pdfBase64 = await PDFGenerator.generateBillPDF(billData);
+          
+          // Generate text message
+          const textBill = PDFGenerator.generateTextBill(billData);
+          
+          // Send PDF via WhatsApp API
+          const result = await whatsappService.sendDocument(
+            order.customerPhone,
+            `🧾 Your bill from ${restaurantName?.replace(/_/g, ' ')} is ready!\n\n${textBill}`,
+            pdfBase64,
+            `bill-${order.id.slice(-6)}.pdf`
+          );
+
+          if (result.success) {
+            toast.success(`E-bill sent successfully to ${order.customerPhone}! 📱`);
+            return;
+          } else {
+            console.warn('API send failed, trying text message:', result.error);
+            
+            // Fallback: Send text message only
+            const textResult = await whatsappService.sendMessage(order.customerPhone, textBill);
+            if (textResult.success) {
+              toast.success(`Text bill sent successfully to ${order.customerPhone}! 📱`);
+              return;
+            } else {
+              throw new Error(textResult.error);
+            }
+          }
+        } catch (apiError) {
+          console.warn('WhatsApp API failed, falling back to web method:', apiError);
+          // Continue to fallback method below
+        }
+      }
+
+      // Method 2: Fallback - Open WhatsApp Web (current method)
+      const billMessage = generateBillMessage(order);
+      whatsappService.openWhatsAppWeb(order.customerPhone, billMessage);
+      toast.success("Opening WhatsApp to send e-bill...");
+      
+    } catch (error) {
+      console.error("Error sending WhatsApp bill:", error);
+      toast.error("Failed to send WhatsApp bill. Please try again.");
+    }
+  };
 
   const handlePrintInvoice = () => {
     // Create invoice content
@@ -122,7 +259,7 @@ export default function OrderDetailsDialog({ order, isOpen, onClose }: OrderDeta
         </head>
         <body>
           <div class="header">
-            <h1>${restaurantName?.replace(/_/g, ' ') || 'Restaurant'}</h1>
+            <h1>${restaurantName?.replace(/_/g, " ") || "Restaurant"}</h1>
             <p>Invoice #${order.id.slice(-6)}</p>
             <p>Date: ${new Date().toLocaleDateString()}</p>
           </div>
@@ -145,14 +282,18 @@ export default function OrderDetailsDialog({ order, isOpen, onClose }: OrderDeta
               </tr>
             </thead>
             <tbody>
-              ${order.items.map(item => `
+              ${order.items
+                .map(
+                  (item) => `
                 <tr>
                   <td>${item.name}</td>
                   <td>${item.quantity}</td>
                   <td>₹${item.price}</td>
                   <td>₹${(item.price * item.quantity).toFixed(2)}</td>
                 </tr>
-              `).join('')}
+              `
+                )
+                .join("")}
             </tbody>
           </table>
           
@@ -166,20 +307,26 @@ export default function OrderDetailsDialog({ order, isOpen, onClose }: OrderDeta
           </div>
         </body>
       </html>
-    `
-    
-    // Open print window
-    const printWindow = window.open('', '_blank')
-    if (printWindow) {
-      printWindow.document.write(invoiceContent)
-      printWindow.document.close()
-      printWindow.print()
-    }
-  }
+    `;
 
-  const subtotal = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
-  const tax = subtotal * 0.05 // 5% tax
-  const total = subtotal + tax
+    // Open print window
+    const printWindow = window.open("", "_blank");
+    if (printWindow) {
+      printWindow.document.write(invoiceContent);
+      printWindow.document.close();
+      printWindow.print();
+    }
+  };
+
+  const subtotal = order.items.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  );
+  // Calculate tax only if enabled
+  const tax = restaurant?.taxEnabled && restaurant?.taxRate 
+    ? (subtotal * restaurant.taxRate) / 100 
+    : 0;
+  const total = subtotal + tax;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -241,16 +388,25 @@ export default function OrderDetailsDialog({ order, isOpen, onClose }: OrderDeta
             <CardContent>
               <div className="space-y-3">
                 {order.items.map((item, index) => (
-                  <div key={index} className="flex justify-between items-center py-2 border-b last:border-b-0">
+                  <div
+                    key={index}
+                    className="flex justify-between items-center py-2 border-b last:border-b-0"
+                  >
                     <div className="flex-1">
                       <h4 className="font-medium">{item.name}</h4>
                       {item.notes && (
-                        <p className="text-sm text-gray-500">Note: {item.notes}</p>
+                        <p className="text-sm text-gray-500">
+                          Note: {item.notes}
+                        </p>
                       )}
                     </div>
                     <div className="text-right">
-                      <div className="font-medium">₹{item.price} × {item.quantity}</div>
-                      <div className="text-sm text-gray-500">₹{(item.price * item.quantity).toFixed(2)}</div>
+                      <div className="font-medium">
+                        ₹{item.price} × {item.quantity}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        ₹{(item.price * item.quantity).toFixed(2)}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -296,7 +452,7 @@ export default function OrderDetailsDialog({ order, isOpen, onClose }: OrderDeta
           </Card>
 
           {/* Payment & Actions */}
-          {order.status !== 'served' && order.status !== 'cancelled' && (
+          {order.status !== "served" && order.status !== "cancelled" && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -306,8 +462,15 @@ export default function OrderDetailsDialog({ order, isOpen, onClose }: OrderDeta
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium mb-2 block">Payment Method</label>
-                  <Select value={paymentMethod} onValueChange={(value: 'cash' | 'card' | 'upi') => setPaymentMethod(value)}>
+                  <label className="text-sm font-medium mb-2 block">
+                    Payment Method
+                  </label>
+                  <Select
+                    value={paymentMethod}
+                    onValueChange={(value: "cash" | "card" | "upi") =>
+                      setPaymentMethod(value)
+                    }
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -326,32 +489,44 @@ export default function OrderDetailsDialog({ order, isOpen, onClose }: OrderDeta
                     className="flex-1 bg-green-600 hover:bg-green-700"
                   >
                     <CheckCircle className="h-4 w-4 mr-2" />
-                    {isProcessing ? 'Processing...' : 'Complete Order'}
+                    {isProcessing ? "Processing..." : "Complete Order"}
                   </Button>
                   <Button
-                    onClick={handlePrintInvoice}
+                    onClick={handleWhatsAppBill}
                     variant="outline"
-                    className="flex-1"
+                    className="flex-1 bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
+                    disabled={!order.customerPhone || order.customerPhone.trim() === ''}
                   >
-                    <Printer className="h-4 w-4 mr-2" />
-                    Print Invoice
+                    <MessageCircle className="h-4 w-4 mr-2" />
+                    {order.customerPhone 
+                      ? `Send to ${order.customerPhone}` 
+                      : 'WhatsApp E-Bill (No Phone)'
+                    }
                   </Button>
                 </div>
+                <Button
+                  onClick={handlePrintInvoice}
+                  variant="outline"
+                  className="w-full"
+                >
+                  <Printer className="h-4 w-4 mr-2" />
+                  Print Invoice
+                </Button>
               </CardContent>
             </Card>
           )}
 
           {/* Status Update Actions */}
-          {order.status !== 'served' && order.status !== 'cancelled' && (
+          {order.status !== "served" && order.status !== "cancelled" && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Update Order Status</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="flex gap-2 flex-wrap">
-                  {order.status === 'pending' && (
+                  {order.status === "pending" && (
                     <Button
-                      onClick={() => handleStatusUpdate('preparing')}
+                      onClick={() => handleStatusUpdate("preparing")}
                       disabled={isProcessing}
                       variant="outline"
                       size="sm"
@@ -359,9 +534,9 @@ export default function OrderDetailsDialog({ order, isOpen, onClose }: OrderDeta
                       Start Preparing
                     </Button>
                   )}
-                  {order.status === 'preparing' && (
+                  {order.status === "preparing" && (
                     <Button
-                      onClick={() => handleStatusUpdate('ready')}
+                      onClick={() => handleStatusUpdate("ready")}
                       disabled={isProcessing}
                       variant="outline"
                       size="sm"
@@ -369,9 +544,9 @@ export default function OrderDetailsDialog({ order, isOpen, onClose }: OrderDeta
                       Mark Ready
                     </Button>
                   )}
-                  {order.status === 'ready' && (
+                  {order.status === "ready" && (
                     <Button
-                      onClick={() => handleStatusUpdate('served')}
+                      onClick={() => handleStatusUpdate("served")}
                       disabled={isProcessing}
                       variant="outline"
                       size="sm"
@@ -380,7 +555,7 @@ export default function OrderDetailsDialog({ order, isOpen, onClose }: OrderDeta
                     </Button>
                   )}
                   <Button
-                    onClick={() => handleStatusUpdate('cancelled')}
+                    onClick={() => handleStatusUpdate("cancelled")}
                     disabled={isProcessing}
                     variant="destructive"
                     size="sm"
@@ -393,13 +568,17 @@ export default function OrderDetailsDialog({ order, isOpen, onClose }: OrderDeta
           )}
 
           {/* Completed Order Info */}
-          {order.status === 'served' && (
+          {order.status === "served" && (
             <Card className="bg-green-50 border-green-200">
               <CardContent className="pt-6">
                 <div className="text-center">
                   <CheckCircle className="h-12 w-12 text-green-600 mx-auto mb-2" />
-                  <h3 className="text-lg font-semibold text-green-800">Order Completed!</h3>
-                  <p className="text-green-600">This order has been successfully served.</p>
+                  <h3 className="text-lg font-semibold text-green-800">
+                    Order Completed!
+                  </h3>
+                  <p className="text-green-600">
+                    This order has been successfully served.
+                  </p>
                   <Button
                     onClick={handlePrintInvoice}
                     variant="outline"
@@ -413,7 +592,55 @@ export default function OrderDetailsDialog({ order, isOpen, onClose }: OrderDeta
             </Card>
           )}
         </div>
+
+        {/* Phone Number Dialog */}
+        {showPhoneDialog && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold mb-4">
+                Enter Customer Phone Number
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Please enter the customer's phone number to send the WhatsApp
+                e-bill.
+              </p>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="phoneNumber">Phone Number</Label>
+                  <Input
+                    id="phoneNumber"
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    placeholder="Enter phone number (e.g., +919876543210)"
+                    className="mt-1"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleWhatsAppBill}
+                    disabled={!phoneNumber.trim()}
+                    className="flex-1 bg-green-600 hover:bg-green-700"
+                  >
+                    <MessageCircle className="h-4 w-4 mr-2" />
+                    Send E-Bill
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setShowPhoneDialog(false);
+                      setPhoneNumber("");
+                    }}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
-  )
-} 
+  );
+}

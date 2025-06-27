@@ -1,7 +1,8 @@
 'use client'
 
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import { getRestaurantByAdminEmail, type Restaurant } from '@/firebase/restaurant-service'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -54,7 +55,8 @@ export default function BillingSystem({
   preSelectedItems = [],
   onBillGenerated 
 }: BillingSystemProps) {
-  const { restaurantName } = useAuth()
+  const { restaurantName, user } = useAuth()
+  const [restaurant, setRestaurant] = useState<Restaurant | null>(null)
   const [orderItems, setOrderItems] = useState<OrderItem[]>(preSelectedItems)
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
@@ -64,6 +66,19 @@ export default function BillingSystem({
   const [showInvoice, setShowInvoice] = useState(false)
   const [currentBill, setCurrentBill] = useState<BillData | null>(null)
   const invoiceRef = useRef<HTMLDivElement>(null)
+
+  // Fetch restaurant data for tax settings
+  useEffect(() => {
+    if (user?.email) {
+      getRestaurantByAdminEmail(user.email)
+        .then(restaurantData => {
+          setRestaurant(restaurantData)
+        })
+        .catch(error => {
+          console.error('Error fetching restaurant:', error)
+        })
+    }
+  }, [user?.email])
 
   // Common menu items for quick add
   const quickItems = [
@@ -79,7 +94,9 @@ export default function BillingSystem({
   const subtotal = orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0)
   const discountAmount = (subtotal * discountPercentage) / 100
   const taxableAmount = subtotal - discountAmount
-  const tax = taxableAmount * 0.18 // 18% GST
+  const tax = restaurant?.taxEnabled && restaurant?.taxRate 
+    ? (taxableAmount * restaurant.taxRate) / 100 
+    : 0
   const total = taxableAmount + tax
 
   // Add item to order
