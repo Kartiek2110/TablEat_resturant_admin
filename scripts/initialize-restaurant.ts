@@ -10,7 +10,6 @@ import {
 // Initialize the "BY_THE_WAY" restaurant
 export async function initializeByTheWayRestaurant() {
   try {
-    console.log('🏪 Creating BY_THE_WAY restaurant with default permissions...')
     
     // Create the restaurant - now with all default permission fields
     const restaurant = await createRestaurant('BY_THE_WAY', 'by_the_way_admin@gmail.com')

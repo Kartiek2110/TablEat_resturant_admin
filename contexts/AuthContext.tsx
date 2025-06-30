@@ -143,7 +143,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshRestaurant = async () => {
     if (user?.email) {
       try {
+        console.log('🔍 AuthContext: Fetching restaurant data...')
         const restaurantData = await getRestaurantByAdminEmail(user.email)
+        console.log('🔍 AuthContext: Restaurant data loaded:', restaurantData)
+        console.log('🔍 AuthContext: Permissions:', {
+          quick_order_approved: restaurantData?.quick_order_approved,
+          analytics_approved: restaurantData?.analytics_approved,
+          customer_approved: restaurantData?.customer_approved,
+          inventory_management_approved: restaurantData?.inventory_management_approved,
+          staff_management_approved: restaurantData?.staff_management_approved
+        })
         setRestaurant(restaurantData)
       } catch (error) {
         console.warn('Could not load restaurant data:', error)
@@ -155,8 +164,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Load restaurant data when user changes
   useEffect(() => {
-    refreshRestaurant()
-  }, [user])
+    if (user?.email) {
+      console.log('🔍 AuthContext: Loading restaurant data for:', user.email)
+      refreshRestaurant()
+    }
+  }, [user?.email])
+
+  // Also refresh when mounted and user exists
+  useEffect(() => {
+    if (mounted && user?.email) {
+      console.log('🔍 AuthContext: Component mounted, refreshing restaurant data')
+      refreshRestaurant()
+    }
+  }, [mounted, user?.email])
 
   const value: AuthContextType = {
     user,

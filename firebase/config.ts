@@ -41,14 +41,10 @@ if (!hasFirebaseConfig) {
     'NEXT_PUBLIC_FIREBASE_APP_ID'
   ].filter(field => !process.env[field])
 
-  if (isBrowser) {
-    console.error('❌ Missing Firebase environment variables:', missingFields)
-    console.error('Please restart your development server and check your .env file')
-    // In browser, we'll handle this gracefully
-  } else {
-    // On server, we can throw an error
-    throw new Error(`Missing Firebase configuration. Please check your .env file.`)
-  }
+  console.warn('⚠️ Missing Firebase environment variables:', missingFields)
+  console.warn('Please check your .env file and restart your development server')
+  
+  // Don't throw error during build time - handle gracefully
 }
 
 // Initialize Firebase only if we have the config

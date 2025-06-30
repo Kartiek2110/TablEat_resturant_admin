@@ -240,7 +240,23 @@ export async function createRestaurant(name: string, adminEmail: string): Promis
       restaurant_open: true // Initially open
     }
 
-    // Create restaurant document in restaurants collection
+    // Check if restaurant already exists to avoid overwriting
+    const existingDoc = await getDoc(doc(db, 'restaurants', restaurantId))
+    
+    if (existingDoc.exists()) {
+      // Restaurant already exists - return existing data instead of overwriting
+      const existingData = existingDoc.data()
+      return {
+        id: restaurantId,
+        ...existingData,
+        createdAt: existingData.createdAt?.toDate() || new Date(),
+        updatedAt: existingData.updatedAt?.toDate() || new Date(),
+        subscriptionStart: existingData.subscriptionStart?.toDate() || new Date(),
+        subscriptionEnd: existingData.subscriptionEnd?.toDate() || new Date()
+      } as Restaurant
+    }
+
+    // Create restaurant document only if it doesn't exist
     await setDoc(doc(db, 'restaurants', restaurantId), {
       ...restaurantData,
       createdAt: serverTimestamp(),
@@ -288,12 +304,40 @@ export async function getRestaurant(restaurantName: string): Promise<Restaurant 
 
 export async function getRestaurantByAdminEmail(email: string): Promise<Restaurant | null> {
   try {
-    // Extract restaurant name from email
-    const match = email.match(/^(.+?)_admin@/)
-    if (!match) return null
+    console.log('🔍 Looking for restaurant with admin email:', email)
     
-    const restaurantName = match[1]
-    return await getRestaurant(restaurantName)
+    // First try the old method (extract restaurant name from email pattern)
+    const match = email.match(/^(.+?)_admin@/)
+    if (match) {
+      console.log('🔍 Found email pattern, extracting restaurant name:', match[1])
+      const restaurantName = match[1]
+      return await getRestaurant(restaurantName)
+    }
+    
+    // New method: Query all restaurants and find by adminEmail
+    console.log('🔍 Email pattern not found, searching all restaurants...')
+    const restaurantsRef = collection(db, 'restaurants')
+    const querySnapshot = await getDocs(restaurantsRef)
+    
+    for (const docSnapshot of querySnapshot.docs) {
+      const data = docSnapshot.data()
+      console.log('🔍 Checking restaurant:', docSnapshot.id, 'Admin email:', data.adminEmail)
+      
+      if (data.adminEmail === email) {
+        console.log('✅ Found matching restaurant:', docSnapshot.id)
+        return {
+          id: docSnapshot.id,
+          ...data,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          updatedAt: data.updatedAt?.toDate() || new Date(),
+          subscriptionStart: data.subscriptionStart?.toDate() || new Date(),
+          subscriptionEnd: data.subscriptionEnd?.toDate() || new Date()
+        } as Restaurant
+      }
+    }
+    
+    console.log('❌ No restaurant found with admin email:', email)
+    return null
   } catch (error) {
     console.error('Error getting restaurant by admin email:', error)
     return null

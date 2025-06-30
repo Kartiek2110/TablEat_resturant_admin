@@ -84,22 +84,7 @@ const navItems = [
 export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const { user } = useAuth()
-  const [restaurant, setRestaurant] = useState<Restaurant | null>(null)
-
-  useEffect(() => {
-    const fetchRestaurant = async () => {
-      if (user?.email) {
-        try {
-          const restaurantData = await getRestaurantByAdminEmail(user.email)
-          setRestaurant(restaurantData)
-        } catch (error) {
-          console.error('Error fetching restaurant:', error)
-        }
-      }
-    }
-    fetchRestaurant()
-  }, [user?.email])
+  const { user, restaurant } = useAuth()
 
   const handleLogout = async () => {
     // const result = await firebaseSignOut() // Commented out Firebase logout call
@@ -113,6 +98,16 @@ export function AppSidebar() {
 
   // Filter navigation items based on approval status
   const memoizedNavItems = useMemo(() => {
+    // Debug: Log restaurant permissions
+    console.log('🔍 Sidebar: Restaurant data:', restaurant)
+    console.log('🔍 Sidebar: Permissions:', {
+      quick_order_approved: restaurant?.quick_order_approved,
+      analytics_approved: restaurant?.analytics_approved,
+      customer_approved: restaurant?.customer_approved,
+      inventory_management_approved: restaurant?.inventory_management_approved,
+      staff_management_approved: restaurant?.staff_management_approved
+    })
+
     return navItems.filter(item => {
       // Always show these items
       if (!["Quick Order", "Analytics", "Customers", "Inventory", "Staff Management"].includes(item.title)) {
@@ -121,27 +116,37 @@ export function AppSidebar() {
       
       // Show Quick Order only if approved
       if (item.title === "Quick Order") {
-        return restaurant?.quick_order_approved === true
+        const shouldShow = restaurant?.quick_order_approved === true
+        console.log(`🔍 Quick Order should show: ${shouldShow}`)
+        return shouldShow
       }
       
       // Show Analytics only if approved
       if (item.title === "Analytics") {
-        return restaurant?.analytics_approved === true
+        const shouldShow = restaurant?.analytics_approved === true
+        console.log(`🔍 Analytics should show: ${shouldShow}`)
+        return shouldShow
       }
       
       // Show Customers only if approved
       if (item.title === "Customers") {
-        return restaurant?.customer_approved === true
+        const shouldShow = restaurant?.customer_approved === true
+        console.log(`🔍 Customers should show: ${shouldShow}`)
+        return shouldShow
       }
       
       // Show Inventory only if approved
       if (item.title === "Inventory") {
-        return restaurant?.inventory_management_approved === true
+        const shouldShow = restaurant?.inventory_management_approved === true
+        console.log(`🔍 Inventory should show: ${shouldShow}`)
+        return shouldShow
       }
       
       // Show Staff Management only if approved
       if (item.title === "Staff Management") {
-        return restaurant?.staff_management_approved === true
+        const shouldShow = restaurant?.staff_management_approved === true
+        console.log(`🔍 Staff Management should show: ${shouldShow}`)
+        return shouldShow
       }
       
       return true
