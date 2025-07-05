@@ -26,8 +26,10 @@ export interface Restaurant {
   adminPhone?: string
   createdAt: Date
   updatedAt: Date
-  address?: string
-  phone?: string
+  address: string
+  phone: string
+  fssaiNo: string
+  gstNo?: string
   description?: string
   status: 'active' | 'inactive'
   subscriptionStart: Date
@@ -98,6 +100,7 @@ export interface Order {
   createdAt: Date
   updatedAt: Date
   orderSource: 'qr_code' | 'quick_order' | 'walk_in' | 'direct_order'
+  orderType: 'dine-in' | 'pickup'
   dailyOrderNumber?: number
   paymentMethod?: 'cash' | 'card' | 'upi' | 'other'
   statusHistory?: {
@@ -237,7 +240,11 @@ export async function createRestaurant(name: string, adminEmail: string): Promis
       quick_order_approved: false, // Initially false
       analytics_approved: false, // Initially false
       customer_approved: true, // Initially true
-      restaurant_open: true // Initially open
+      restaurant_open: true, // Initially open
+      address: '',
+      phone: '',
+      fssaiNo: '',
+      gstNo: undefined,
     }
 
     // Check if restaurant already exists to avoid overwriting
@@ -462,7 +469,9 @@ export async function createOrder(restaurantName: string, order: Omit<Order, 'id
     await createNotification(restaurantName, {
       type: 'new_order',
       title: 'New Order Received',
-      message: `Table ${order.tableNumber} has placed a new order`,
+      message: order.orderType === 'pickup' 
+        ? `Pickup order from ${order.customerName || 'Customer'} - ${order.items.length} items`
+        : `Dine-in order for Table ${order.tableNumber} - ${order.items.length} items`,
       orderId: docRef.id,
       tableNumber: order.tableNumber,
       isRead: false
@@ -470,15 +479,17 @@ export async function createOrder(restaurantName: string, order: Omit<Order, 'id
 
     console.log(`✅ Notification created for order ${docRef.id}`)
 
-    // Update table status
-    console.log(`🔄 Updating Table ${order.tableNumber} status to occupied...`)
-    try {
-      await updateTableStatus(restaurantName, order.tableNumber, true, docRef.id)
-      console.log(`✅ Table ${order.tableNumber} marked as occupied with order ${docRef.id}`)
-    } catch (tableError) {
-      console.error(`❌ Failed to update table ${order.tableNumber} status:`, tableError)
-      // Don't throw error here - order creation should succeed even if table update fails
-      // The auto-sync logic in the dashboard will handle any inconsistencies
+    // Update table status (only for dine-in orders)
+    if (order.orderType === 'dine-in' && order.tableNumber > 0) {
+      console.log(`🔄 Updating Table ${order.tableNumber} status to occupied...`)
+      try {
+        await updateTableStatus(restaurantName, order.tableNumber, true, docRef.id)
+        console.log(`✅ Table ${order.tableNumber} marked as occupied with order ${docRef.id}`)
+      } catch (tableError) {
+        console.error(`❌ Failed to update table ${order.tableNumber} status:`, tableError)
+        // Don't throw error here - order creation should succeed even if table update fails
+        // The auto-sync logic in the dashboard will handle any inconsistencies
+      }
     }
 
     const createdOrder = {
@@ -567,8 +578,8 @@ export async function updateOrderStatus(restaurantName: string, orderId: string,
       updatedAt: serverTimestamp()
     })
 
-    // Update table status when order is completed or cancelled
-    if (status === 'served' || status === 'cancelled') {
+    // Update table status when order is completed or cancelled (only for dine-in orders)
+    if ((status === 'served' || status === 'cancelled') && currentOrder.orderType === 'dine-in' && currentOrder.tableNumber > 0) {
       try {
         await updateTableStatus(restaurantName, currentOrder.tableNumber, false)
       } catch (tableError) {
@@ -582,7 +593,9 @@ export async function updateOrderStatus(restaurantName: string, orderId: string,
       await createNotification(restaurantName, {
         type: 'order_ready',
         title: 'Order Ready',
-        message: `Order for Table ${currentOrder.tableNumber} is ready`,
+        message: currentOrder.orderType === 'pickup' 
+          ? `Pickup order for ${currentOrder.customerName || 'Customer'} is ready`
+          : `Order for Table ${currentOrder.tableNumber} is ready`,
         orderId,
         tableNumber: currentOrder.tableNumber,
         isRead: false
@@ -971,7 +984,8 @@ export async function processIncomingOrder(restaurantName: string, orderData: {
       status: 'pending',
       totalAmount: orderData.totalAmount,
       notes: orderData.notes || '',
-      orderSource: 'direct_order'
+      orderSource: 'direct_order',
+      orderType: 'dine-in'
     }
 
     console.log(`🔄 processIncomingOrder: About to create order with data:`, order)
@@ -985,10 +999,12 @@ export async function processIncomingOrder(restaurantName: string, orderData: {
     await createNotification(restaurantName, {
       type: 'new_order',
       title: 'New Order Received',
-      message: `Order from ${orderData.customerName} - ${orderData.items.length} items, Table ${orderData.tableNumber}`,
-      isRead: false,
-      tableNumber: orderData.tableNumber,
-      orderId: createdOrder.id
+      message: order.orderType === 'pickup' 
+        ? `Pickup order from ${order.customerName || 'Customer'} - ${order.items.length} items`
+        : `Dine-in order for Table ${order.tableNumber} - ${order.items.length} items`,
+      orderId: createdOrder.id,
+      tableNumber: order.tableNumber,
+      isRead: false
     })
     
     console.log(`✅ processIncomingOrder: Notification created for order ${createdOrder.id}`)
@@ -1799,5 +1815,32 @@ export async function syncTableStatusesWithOrders(restaurantName: string): Promi
   } catch (error) {
     console.error('Error syncing table statuses:', error)
     throw new Error('Failed to sync table statuses')
+  }
+}
+
+// Get customer by phone number
+export async function getCustomerByPhone(restaurantName: string, phone: string): Promise<Customer | null> {
+  try {
+    const restaurantId = getRestaurantCollectionName(restaurantName)
+    const normalizedPhone = normalizePhoneNumber(phone)
+    const docId = normalizedPhone
+    
+    const docRef = doc(db, 'restaurants', restaurantId, 'customers', docId)
+    const docSnap = await getDoc(docRef)
+    
+    if (docSnap.exists()) {
+      const data = docSnap.data()
+      return {
+        id: docSnap.id,
+        ...data,
+        createdAt: data.createdAt?.toDate() || new Date(),
+        lastVisit: data.lastVisit?.toDate() || new Date()
+      } as Customer
+    }
+    
+    return null
+  } catch (error) {
+    console.error('Error getting customer by phone:', error)
+    return null
   }
 } 

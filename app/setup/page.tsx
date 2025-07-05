@@ -53,7 +53,7 @@ export default function SetupPage() {
         // Create the restaurant in Firebase with the user-provided name
         const cleanName = restaurantName.replace(/[^a-zA-Z0-9_\s]/g, '').replace(/\s+/g, '_').toUpperCase()
         await createRestaurant(cleanName, user.email)
-        router.push('/dashboard')
+        router.push('/dashboard/profile')
       } else {
         setError(result.error || 'Failed to complete setup')
       }

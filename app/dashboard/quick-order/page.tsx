@@ -32,12 +32,15 @@ import {
 import {
   subscribeToMenuItems,
   subscribeToTables,
+  subscribeToCustomers,
   createOrder,
   getRestaurantByAdminEmail,
+  getCustomerByPhone,
   type MenuItem,
   type Table,
   type OrderItem,
-  type Restaurant
+  type Restaurant,
+  type Customer
 } from '@/firebase/restaurant-service'
 import { toast } from "sonner"
 
@@ -49,47 +52,58 @@ export default function QuickOrderPage() {
   const { restaurantName, user } = useAuth()
   const [menuItems, setMenuItems] = useState<MenuItem[]>([])
   const [tables, setTables] = useState<Table[]>([])
+  const [customers, setCustomers] = useState<Customer[]>([])
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null)
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState<string>('all')
+  const [cart, setCart] = useState<CartItem[]>([])
+  const [isCartOpen, setIsCartOpen] = useState(false)
   
   // Customer details
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [selectedTable, setSelectedTable] = useState('')
+  const [orderType, setOrderType] = useState<'dine-in' | 'pickup'>('dine-in')
   const [notes, setNotes] = useState('')
-  
-  // Cart
-  const [cart, setCart] = useState<CartItem[]>([])
-  const [selectedCategory, setSelectedCategory] = useState('All')
-  const [searchTerm, setSearchTerm] = useState('')
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
+  const [customerSearchTerm, setCustomerSearchTerm] = useState('')
+  const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false)
 
   useEffect(() => {
     if (!restaurantName) return
 
     const unsubscribeMenu = subscribeToMenuItems(restaurantName, (items) => {
-      setMenuItems(items.filter(item => item.available))
+      setMenuItems(items)
       setLoading(false)
     })
 
-    const unsubscribeTables = subscribeToTables(restaurantName, (tableData) => {
-      setTables(tableData.filter(table => !table.occupied))
+    const unsubscribeTables = subscribeToTables(restaurantName, (tables) => {
+      setTables(tables)
     })
 
-    // Fetch restaurant data for tax settings
-    if (user?.email) {
-      getRestaurantByAdminEmail(user.email)
-        .then(restaurantData => {
+    const unsubscribeCustomers = subscribeToCustomers(restaurantName, (customers) => {
+      setCustomers(customers)
+    })
+
+    // Fetch restaurant data
+    const fetchRestaurant = async () => {
+      if (user?.email) {
+        try {
+          const restaurantData = await getRestaurantByAdminEmail(user.email)
           setRestaurant(restaurantData)
-        })
-        .catch(error => {
+        } catch (error) {
           console.error('Error fetching restaurant:', error)
-        })
+        }
+      }
     }
+    fetchRestaurant()
 
     return () => {
       unsubscribeMenu()
       unsubscribeTables()
+      unsubscribeCustomers()
     }
   }, [restaurantName, user?.email])
 
@@ -186,7 +200,7 @@ export default function QuickOrderPage() {
       const orderData = {
         customerName: customerName.trim() || `Order #${dailyOrderNumber}`,
         customerPhone: customerPhone.trim() || '',
-        tableNumber: selectedTable ? parseInt(selectedTable) : 0,
+        tableNumber: orderType === 'pickup' ? 0 : (selectedTable ? parseInt(selectedTable) : 0),
         items: cart.map(item => ({
           menuItemId: item.menuItemId,
           name: item.name,
@@ -198,6 +212,7 @@ export default function QuickOrderPage() {
         totalAmount: getTotalAmount(),
         notes: notes.trim(),
         orderSource: 'quick_order' as const,
+        orderType: orderType,
         dailyOrderNumber: dailyOrderNumber
       }
 
@@ -207,10 +222,14 @@ export default function QuickOrderPage() {
       setCustomerName('')
       setCustomerPhone('')
       setSelectedTable('')
+      setOrderType('dine-in')
       setNotes('')
       setCart([])
+      setSelectedCustomer(null)
+      setCustomerSearchTerm('')
+      setShowCustomerSuggestions(false)
       
-      toast.success(`Order #${dailyOrderNumber} created successfully!`)
+      toast.success(`${orderType === 'pickup' ? 'Pickup' : 'Dine-in'} Order #${dailyOrderNumber} created successfully!`)
     } catch (error) {
       console.error('Error creating order:', error)
       toast.error('Failed to create order')
@@ -218,6 +237,57 @@ export default function QuickOrderPage() {
       setCreating(false)
     }
   }
+
+  // Customer selection handlers
+  const handleCustomerSelect = (customer: Customer) => {
+    setSelectedCustomer(customer)
+    setCustomerName(customer.name)
+    setCustomerPhone(customer.phone)
+    setCustomerSearchTerm('')
+    setShowCustomerSuggestions(false)
+    toast.success(`Selected customer: ${customer.name} 👋`)
+  }
+
+  const handleCustomerSearchChange = (value: string) => {
+    setCustomerSearchTerm(value)
+    setShowCustomerSuggestions(value.length > 0)
+    
+    // If user is typing a new customer, clear selection
+    if (selectedCustomer && value !== selectedCustomer.name) {
+      setSelectedCustomer(null)
+      setCustomerName(value)
+      setCustomerPhone('')
+    }
+  }
+
+  const clearCustomerSelection = () => {
+    setSelectedCustomer(null)
+    setCustomerName('')
+    setCustomerPhone('')
+    setCustomerSearchTerm('')
+    setShowCustomerSuggestions(false)
+  }
+
+  // Filter customers based on search term
+  const filteredCustomers = customers.filter(customer =>
+    customer.name.toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
+    customer.phone.includes(customerSearchTerm)
+  ).slice(0, 5) // Limit to 5 suggestions
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element
+      if (target && !target.closest('.customer-suggestions-container')) {
+        setShowCustomerSuggestions(false)
+      }
+    }
+
+    if (showCustomerSuggestions) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showCustomerSuggestions])
 
   if (loading) {
     return (
@@ -437,14 +507,90 @@ export default function QuickOrderPage() {
             </CardHeader>
             <CardContent className="space-y-3 sm:space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name" className="text-sm">Customer Name (Optional)</Label>
-                <Input
-                  id="name"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="Enter customer name (optional)"
-                  className="text-sm sm:text-base"
-                />
+                <Label htmlFor="orderType" className="text-sm">Order Type *</Label>
+                <Select value={orderType} onValueChange={(value: 'dine-in' | 'pickup') => setOrderType(value)}>
+                  <SelectTrigger className="text-sm sm:text-base">
+                    <SelectValue placeholder="Select order type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="dine-in">🍽️ Dine-In</SelectItem>
+                    <SelectItem value="pickup">📦 Pickup</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="customer-suggestions-container space-y-2 relative">
+                <Label htmlFor="customerName" className="text-sm">Customer Name (Optional)</Label>
+                <div className="relative">
+                  <Input
+                    id="customerName"
+                    value={customerSearchTerm || customerName}
+                    onChange={(e) => handleCustomerSearchChange(e.target.value)}
+                    onFocus={() => {
+                      if (customers.length > 0) {
+                        setShowCustomerSuggestions(true)
+                      }
+                    }}
+                    placeholder={customers.length > 0 ? "Search existing customers or enter new name" : "Enter customer name"}
+                    className="text-sm sm:text-base"
+                  />
+                  {selectedCustomer && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearCustomerSelection}
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0 text-gray-400 hover:text-gray-600"
+                    >
+                      ✕
+                    </Button>
+                  )}
+                </div>
+                
+                {/* Customer Suggestions Dropdown */}
+                {showCustomerSuggestions && (
+                  <div className="customer-suggestions-container absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                    {filteredCustomers.length > 0 ? (
+                      <>
+                        <div className="p-2 text-xs text-gray-500 border-b">
+                          Select from existing customers ({customers.length} total)
+                        </div>
+                        {filteredCustomers.map((customer) => (
+                          <button
+                            key={customer.id}
+                            type="button"
+                            onClick={() => handleCustomerSelect(customer)}
+                            className="w-full p-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="font-medium text-sm">{customer.name}</div>
+                                <div className="text-xs text-gray-500">📞 {customer.phone}</div>
+                              </div>
+                              <div className="text-xs text-gray-400 ml-2">
+                                {customer.totalOrders} orders
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </>
+                    ) : customerSearchTerm ? (
+                      <div className="p-3 text-sm text-gray-500 text-center">
+                        No customers found. You can enter a new customer name.
+                      </div>
+                    ) : customers.length === 0 ? (
+                      <div className="p-3 text-sm text-gray-500 text-center">
+                        No customers in database yet. Add new customer details to start building your customer base.
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+                
+                {selectedCustomer && (
+                  <div className="text-xs text-green-600 flex items-center gap-1">
+                    ✅ Selected: {selectedCustomer.name} ({selectedCustomer.totalOrders} previous orders)
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -458,43 +604,45 @@ export default function QuickOrderPage() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="table" className="text-sm">Table Selection (Optional)</Label>
-                <Select value={selectedTable} onValueChange={setSelectedTable}>
-                  <SelectTrigger className="text-sm sm:text-base">
-                    <SelectValue placeholder="Select table (optional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {tables.length === 0 ? (
-                      <>
-                        <SelectItem value="will-assign">
-                          Will assign table later
-                        </SelectItem>
-                      </>
-                    ) : (
-                      <>
-                        {tables.map((table) => (
-                          <SelectItem key={table.id} value={table.tableNumber.toString()}>
-                            🟢 Table {table.tableNumber} (Seats {table.capacity})
+              {orderType === 'dine-in' && (
+                <div className="space-y-2">
+                  <Label htmlFor="table" className="text-sm">Table Selection (Optional)</Label>
+                  <Select value={selectedTable} onValueChange={setSelectedTable}>
+                    <SelectTrigger className="text-sm sm:text-base">
+                      <SelectValue placeholder="Select table (optional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {tables.length === 0 ? (
+                        <>
+                          <SelectItem value="will-assign">
+                            Will assign table later
                           </SelectItem>
-                        ))}
-                        <SelectItem value="will-assign">
-                          Will assign table later
-                        </SelectItem>
-                      </>
-                    )}
-                  </SelectContent>
-                </Select>
-                {tables.length > 0 ? (
-                  <p className="text-xs text-green-600">
-                    {tables.length} table{tables.length > 1 ? 's' : ''} available
-                  </p>
-                ) : (
-                  <p className="text-xs text-yellow-600">
-                    No tables currently available
-                  </p>
-                )}
-              </div>
+                        </>
+                      ) : (
+                        <>
+                          {tables.map((table) => (
+                            <SelectItem key={table.id} value={table.tableNumber.toString()}>
+                              🟢 Table {table.tableNumber} (Seats {table.capacity})
+                            </SelectItem>
+                          ))}
+                          <SelectItem value="will-assign">
+                            Will assign table later
+                          </SelectItem>
+                        </>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  {tables.length > 0 ? (
+                    <p className="text-xs text-green-600">
+                      {tables.length} table{tables.length > 1 ? 's' : ''} available
+                    </p>
+                  ) : (
+                    <p className="text-xs text-yellow-600">
+                      No tables currently available
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="notes" className="text-sm">Special Notes</Label>

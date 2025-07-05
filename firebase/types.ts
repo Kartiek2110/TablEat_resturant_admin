@@ -6,8 +6,10 @@ export interface Restaurant {
   adminPhone?: string
   createdAt: Date
   updatedAt: Date
-  address?: string
-  phone?: string
+  address: string
+  phone: string
+  fssaiNo: string
+  gstNo?: string
   description?: string
   status: 'active' | 'inactive'
   subscriptionStart: Date
@@ -77,6 +79,7 @@ export interface Order {
   updatedAt: Date
   notes?: string
   orderSource: 'qr_code' | 'quick_order' | 'walk_in' | 'direct_order'
+  orderType: 'dine-in' | 'pickup'
   dailyOrderNumber?: number
   paymentMethod?: 'cash' | 'card' | 'upi' | 'other'
   statusHistory?: {

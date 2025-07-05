@@ -3,8 +3,10 @@ import { Order } from '@/firebase/restaurant-service-optimized'
 export interface BillPDFData {
   order: Order
   restaurantName: string
-  restaurantAddress?: string
-  restaurantPhone?: string
+  restaurantAddress: string
+  restaurantPhone: string
+  fssaiNo: string
+  gstNo?: string
   taxRate?: number
   taxEnabled?: boolean
 }
@@ -13,12 +15,18 @@ export class PDFGenerator {
   
   // Generate PDF bill as base64 string
   static async generateBillPDF(data: BillPDFData): Promise<string> {
-    const { order, restaurantName, restaurantAddress, restaurantPhone, taxRate = 0, taxEnabled = false } = data
+    const { order, restaurantName, restaurantAddress, restaurantPhone, fssaiNo, gstNo, taxRate = 0, taxEnabled = false } = data
     
     // Calculate totals
     const subtotal = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
     const taxAmount = taxEnabled && taxRate ? (subtotal * taxRate) / 100 : 0
     const total = subtotal + taxAmount
+    
+    // Generate bill number in format: RN/2024-25/001
+    const currentYear = new Date().getFullYear()
+    const financialYear = `${currentYear}-${(currentYear + 1).toString().slice(-2)}`
+    const restaurantInitials = restaurantName.replace(/_/g, ' ').split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 2)
+    const billNumber = `${restaurantInitials}/${financialYear}/${order.dailyOrderNumber?.toString().padStart(3, '0') || order.id.slice(-3)}`
     
     // Create HTML content for PDF
     const htmlContent = `
@@ -26,7 +34,7 @@ export class PDFGenerator {
       <html>
         <head>
           <meta charset="utf-8">
-          <title>Bill - Order #${order.id.slice(-6)}</title>
+          <title>Invoice - ${billNumber}</title>
           <style>
             body {
               font-family: 'Arial', sans-serif;
@@ -53,14 +61,20 @@ export class PDFGenerator {
               font-size: 28px;
               font-weight: bold;
               color: #1e40af;
-              margin-bottom: 5px;
+              margin-bottom: 8px;
               text-transform: uppercase;
             }
             
             .restaurant-details {
               font-size: 14px;
               color: #666;
-              margin-bottom: 10px;
+              margin-bottom: 5px;
+              line-height: 1.4;
+            }
+            
+            .restaurant-details.address {
+              font-weight: 500;
+              margin-bottom: 8px;
             }
             
             .bill-title {
@@ -68,6 +82,7 @@ export class PDFGenerator {
               font-weight: bold;
               color: #dc2626;
               margin-top: 15px;
+              text-decoration: underline;
             }
             
             .bill-info {
@@ -215,30 +230,28 @@ export class PDFGenerator {
             <!-- Header -->
             <div class="header">
               <div class="restaurant-name">${restaurantName.replace(/_/g, ' ')}</div>
-              <div class="restaurant-details">
-                ${restaurantAddress || 'Restaurant Address'}
-              </div>
-              <div class="restaurant-details">
-                📞 ${restaurantPhone || '+91 XXXXX XXXXX'} | 📧 info@restaurant.com
-              </div>
-              <div class="bill-title">📄 BILL / INVOICE</div>
+              <div class="restaurant-details address">${restaurantAddress}</div>
+              <div class="restaurant-details">📞 ${restaurantPhone}</div>
+              <div class="restaurant-details">🍽️ FSSAI: ${fssaiNo}</div>
+              ${gstNo ? `<div class="restaurant-details">💼 GST: ${gstNo}</div>` : ''}
+              <div class="bill-title">━━━━━━━━━━━━━━━━</div>
+              <div class="bill-title">INVOICE</div>
+              <div class="bill-title">━━━━━━━━━━━━━━━━</div>
             </div>
 
             <!-- Bill Information -->
             <div class="bill-info">
               <div class="bill-info-left">
                 <h3>🧾 Bill Details</h3>
-                <p><strong>Invoice #:</strong> ${order.id.slice(-6)}</p>
-                <p><strong>Table:</strong> ${order.tableNumber}</p>
+                <p><strong>Bill No.:</strong> ${billNumber}</p>
                 <p><strong>Date:</strong> ${order.createdAt.toLocaleDateString()}</p>
                 <p><strong>Time:</strong> ${order.createdAt.toLocaleTimeString()}</p>
-                <p><strong>Order Source:</strong> ${order.orderSource === 'quick_order' ? 'Quick Order' : 'Regular Order'}</p>
               </div>
               <div class="bill-info-right">
                 <h3>👤 Customer Details</h3>
                 <p><strong>Name:</strong> ${order.customerName}</p>
-                <p><strong>Phone:</strong> ${order.customerPhone}</p>
-                <p><strong>Payment:</strong> Cash</p>
+                ${order.customerPhone ? `<p><strong>Phone:</strong> ${order.customerPhone}</p>` : ''}
+                <p><strong>Order Type:</strong> ${order.orderType === 'pickup' ? '📦 Pickup' : `🍽️ Dine-Table ${order.tableNumber}`}</p>
               </div>
             </div>
 
@@ -277,17 +290,19 @@ export class PDFGenerator {
 
             <!-- Totals -->
             <div class="totals">
-              <div class="total-row subtotal">
-                <span>Subtotal:</span>
-                <span>₹${subtotal.toFixed(2)}</span>
-              </div>
-              
-              ${taxEnabled && taxRate > 0 ? `
-                <div class="total-row tax">
-                  <span>Tax (${taxRate}%):</span>
-                  <span>₹${taxAmount.toFixed(2)}</span>
+              <div style="border-bottom: 1px solid #e5e7eb; margin-bottom: 15px; padding-bottom: 10px;">
+                <div class="total-row subtotal">
+                  <span>Total Value:</span>
+                  <span>₹${subtotal.toFixed(2)}</span>
                 </div>
-              ` : ''}
+                
+                ${taxEnabled && taxRate > 0 ? `
+                  <div class="total-row tax">
+                    <span>Tax (${taxRate}%):</span>
+                    <span>₹${taxAmount.toFixed(2)}</span>
+                  </div>
+                ` : ''}
+              </div>
               
               <div class="total-row final">
                 <span>💰 TOTAL AMOUNT:</span>
@@ -330,11 +345,17 @@ export class PDFGenerator {
 
   // Generate simple text bill for WhatsApp
   static generateTextBill(data: BillPDFData): string {
-    const { order, restaurantName, taxRate = 0, taxEnabled = false } = data
+    const { order, restaurantName, restaurantAddress, restaurantPhone, fssaiNo, gstNo, taxRate = 0, taxEnabled = false } = data
     
     const subtotal = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
     const taxAmount = taxEnabled && taxRate ? (subtotal * taxRate) / 100 : 0
     const total = subtotal + taxAmount
+
+    // Generate bill number in format: RN/2024-25/001
+    const currentYear = new Date().getFullYear()
+    const financialYear = `${currentYear}-${(currentYear + 1).toString().slice(-2)}`
+    const restaurantInitials = restaurantName.replace(/_/g, ' ').split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 2)
+    const billNumber = `${restaurantInitials}/${financialYear}/${order.dailyOrderNumber?.toString().padStart(3, '0') || order.id.slice(-3)}`
 
     const itemsList = order.items
       .map(item => `${item.quantity}x ${item.name} - ₹${(item.price * item.quantity).toFixed(2)}`)
@@ -344,18 +365,23 @@ export class PDFGenerator {
       ? `🏷️ Tax (${taxRate}%): ₹${taxAmount.toFixed(2)}\n━━━━━━━━━━━━━━━━\n`
       : ''
 
-    return `🧾 *E-BILL* - ${restaurantName.replace(/_/g, ' ')}
+    return `🧾 *${restaurantName.replace(/_/g, ' ').toUpperCase()}*
+${restaurantAddress}
+📞 ${restaurantPhone}
+🍽️ FSSAI: ${fssaiNo}${gstNo ? `\n💼 GST: ${gstNo}` : ''}
+━━━━━━━━━━━━━━━━
+*INVOICE*
 ━━━━━━━━━━━━━━━━
 📅 Date: ${order.createdAt.toLocaleDateString()}
 🕐 Time: ${order.createdAt.toLocaleTimeString()}
 👤 Customer: ${order.customerName}
-🪑 Table: ${order.tableNumber}
-🆔 Order ID: #${order.id.slice(-6)}
+${order.orderType === 'pickup' ? '📦 Order Type: Pickup' : `🍽️ Table: ${order.tableNumber}`}
+🆔 Bill No.: ${billNumber}
 
 📋 *ORDER DETAILS:*
 ${itemsList}
 ━━━━━━━━━━━━━━━━
-💰 Subtotal: ₹${subtotal.toFixed(2)}
+💰 Total Value: ₹${subtotal.toFixed(2)}
 ${taxLine}💵 *TOTAL AMOUNT: ₹${total.toFixed(2)}*
 
 Thank you for dining with us! 🙏

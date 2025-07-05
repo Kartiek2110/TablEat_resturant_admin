@@ -162,7 +162,8 @@ export default function OrdersPage() {
           'Order ID': order.id,
           'Customer Name': order.customerName,
           'Customer Phone': order.customerPhone || '',
-          'Table Number': order.tableNumber,
+          'Order Type': order.orderType === 'pickup' ? 'Pickup' : 'Dine-In',
+          'Table Number': order.orderType === 'pickup' ? 'N/A' : order.tableNumber,
           'Items': order.items.map(item => `${item.quantity}x ${item.name} (₹${item.price})`).join('; '),
           'Total Items': order.items.length,
           'Total Amount': order.totalAmount,
@@ -185,6 +186,7 @@ export default function OrdersPage() {
         { wch: 20 }, // Order ID
         { wch: 20 }, // Customer Name
         { wch: 15 }, // Customer Phone
+        { wch: 12 }, // Order Type
         { wch: 8 },  // Table Number
         { wch: 50 }, // Items
         { wch: 12 }, // Total Items
@@ -285,7 +287,7 @@ export default function OrdersPage() {
                   >
                     <div className="flex items-center gap-3">
                       <Badge variant="destructive" className="animate-pulse">
-                        Table {order.tableNumber}
+                        {order.orderType === 'pickup' ? '📦 Pickup' : `🍽️ Table ${order.tableNumber}`}
                       </Badge>
                       <div>
                         <p className="font-semibold text-red-800">{order.customerName}</p>
@@ -459,7 +461,15 @@ export default function OrdersPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline">Table {order.tableNumber}</Badge>
+                          {order.orderType === 'pickup' ? (
+                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                              📦 Pickup
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline">
+                              🍽️ Dine-Table {order.tableNumber}
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell>
                           <div className="space-y-1">

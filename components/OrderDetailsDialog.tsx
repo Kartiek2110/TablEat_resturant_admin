@@ -90,8 +90,8 @@ export default function OrderDetailsDialog({
     try {
       await updateOrderStatus(restaurantName, order.id, newStatus);
 
-      // If order is served, free up the table
-      if (newStatus === "served") {
+      // If order is served, free up the table (only for dine-in orders)
+      if (newStatus === "served" && order.orderType === "dine-in" && order.tableNumber > 0) {
         await updateTableStatus(restaurantName, order.tableNumber, false);
       }
 
@@ -112,8 +112,10 @@ export default function OrderDetailsDialog({
       // Update order status to served
       await updateOrderStatus(restaurantName, order.id, "served");
 
-      // Free up the table
-      await updateTableStatus(restaurantName, order.tableNumber, false);
+      // Free up the table (only for dine-in orders)
+      if (order.orderType === "dine-in" && order.tableNumber > 0) {
+        await updateTableStatus(restaurantName, order.tableNumber, false);
+      }
 
       toast.success("Order completed successfully! 🎉");
       onClose();
@@ -143,22 +145,33 @@ export default function OrderDetailsDialog({
       : 0;
     const totalWithTax = order.totalAmount + taxAmount;
 
+    // Generate bill number in format: RN/2024-25/001
+    const currentYear = new Date().getFullYear()
+    const financialYear = `${currentYear}-${(currentYear + 1).toString().slice(-2)}`
+    const restaurantInitials = restaurantNameFormatted.split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 2)
+    const billNumber = `${restaurantInitials}/${financialYear}/${order.dailyOrderNumber?.toString().padStart(3, '0') || order.id.slice(-3)}`
+
     const taxLine = restaurant?.taxEnabled && restaurant?.taxRate && restaurant.taxRate > 0
       ? `🏷️ Tax (${restaurant.taxRate}%): ₹${taxAmount.toFixed(2)}\n━━━━━━━━━━━━━━━━\n`
       : '';
 
-    return `🧾 *E-BILL* - ${restaurantNameFormatted}
+    return `🧾 *${restaurantNameFormatted.toUpperCase()}*
+${restaurant?.address || 'Restaurant Address'}
+📞 ${restaurant?.phone || 'Phone Number'}
+🍽️ FSSAI: ${restaurant?.fssaiNo || 'FSSAI Number'}${restaurant?.gstNo ? `\n💼 GST: ${restaurant.gstNo}` : ''}
+━━━━━━━━━━━━━━━━
+*INVOICE*
 ━━━━━━━━━━━━━━━━
 📅 Date: ${new Date().toLocaleDateString()}
 🕐 Time: ${new Date().toLocaleTimeString()}
 👤 Customer: ${order.customerName || "Walk-in Customer"}
-🪑 Table: ${order.tableNumber || "N/A"}
-🆔 Order ID: #${order.id.slice(-6)}
+${order.orderType === 'pickup' ? '📦 Order Type: Pickup' : `🍽️ Table: ${order.tableNumber || "N/A"}`}
+🆔 Bill No.: ${billNumber}
 
 📋 *ORDER DETAILS:*
 ${itemsList}
 ━━━━━━━━━━━━━━━━
-💰 Subtotal: ₹${order.totalAmount.toFixed(2)}
+💰 Total Value: ₹${order.totalAmount.toFixed(2)}
 ${taxLine}💵 *TOTAL AMOUNT: ₹${totalWithTax.toFixed(2)}*
 💳 Payment: ${paymentMethod.toUpperCase()}
 
@@ -187,8 +200,10 @@ Powered by TablEat 🍽️`;
           const billData = {
             order,
             restaurantName: restaurantName || "Restaurant",
-            restaurantAddress: restaurant?.address,
-            restaurantPhone: restaurant?.phone,
+            restaurantAddress: restaurant?.address || "Restaurant Address",
+            restaurantPhone: restaurant?.phone || "Phone Number",
+            fssaiNo: restaurant?.fssaiNo || "FSSAI Number",
+            gstNo: restaurant?.gstNo,
             taxRate: restaurant?.taxRate,
             taxEnabled: restaurant?.taxEnabled
           };
@@ -372,7 +387,17 @@ Powered by TablEat 🍽️`;
               </div>
               <div className="flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-gray-500" />
-                <span>Table {order.tableNumber}</span>
+                <span>
+                  {order.orderType === 'pickup' ? (
+                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                      📦 Pickup
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline">
+                      🍽️ Dine-Table {order.tableNumber}
+                    </Badge>
+                  )}
+                </span>
               </div>
             </CardContent>
           </Card>

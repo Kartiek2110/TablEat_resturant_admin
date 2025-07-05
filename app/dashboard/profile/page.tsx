@@ -32,6 +32,8 @@ export default function ProfilePage() {
     description: '',
     address: '',
     phone: '',
+    fssaiNo: '',
+    gstNo: '',
     email: '',
     adminPhone: '',
     taxEnabled: false,
@@ -50,6 +52,8 @@ export default function ProfilePage() {
               description: restaurantData.description || '',
               address: restaurantData.address || '',
               phone: restaurantData.phone || '',
+              fssaiNo: restaurantData.fssaiNo || '',
+              gstNo: restaurantData.gstNo || '',
               email: restaurantData.adminEmail || '',
               adminPhone: restaurantData.adminPhone || '',
               taxEnabled: restaurantData.taxEnabled || false,
@@ -69,6 +73,22 @@ export default function ProfilePage() {
   const handleSave = async () => {
     if (!restaurant) return
     
+    // Validate mandatory fields
+    if (!formData.address.trim()) {
+      toast.error('Restaurant address is required')
+      return
+    }
+    
+    if (!formData.phone.trim()) {
+      toast.error('Restaurant phone number is required')
+      return
+    }
+    
+    if (!formData.fssaiNo.trim()) {
+      toast.error('FSSAI number is required')
+      return
+    }
+    
     try {
       setSaving(true)
       const restaurantId = restaurant.id
@@ -78,6 +98,8 @@ export default function ProfilePage() {
         description: formData.description,
         address: formData.address,
         phone: formData.phone,
+        fssaiNo: formData.fssaiNo,
+        gstNo: formData.gstNo,
         adminPhone: formData.adminPhone,
         taxEnabled: formData.taxEnabled,
         taxRate: formData.taxRate,
@@ -91,6 +113,8 @@ export default function ProfilePage() {
         description: formData.description,
         address: formData.address,
         phone: formData.phone,
+        fssaiNo: formData.fssaiNo,
+        gstNo: formData.gstNo,
         adminPhone: formData.adminPhone,
         taxEnabled: formData.taxEnabled,
         taxRate: formData.taxRate
@@ -283,7 +307,7 @@ export default function ProfilePage() {
               <span>Restaurant Information</span>
             </CardTitle>
             <CardDescription>
-              Update your restaurant details and contact information
+              Update your restaurant details and contact information. Fields marked with * are required for invoice generation.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -311,7 +335,7 @@ export default function ProfilePage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="address">Address</Label>
+              <Label htmlFor="address">Address *</Label>
               <Textarea
                 id="address"
                 value={formData.address}
@@ -319,16 +343,41 @@ export default function ProfilePage() {
                 placeholder="Enter restaurant address"
                 rows={2}
                 className="text-sm md:text-base resize-none"
+                required
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="phone">Phone Number</Label>
+              <Label htmlFor="phone">Phone Number *</Label>
               <Input
                 id="phone"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 placeholder="Enter phone number"
+                className="h-10 md:h-12 text-sm md:text-base"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="fssaiNo">FSSAI Number *</Label>
+              <Input
+                id="fssaiNo"
+                value={formData.fssaiNo}
+                onChange={(e) => setFormData({ ...formData, fssaiNo: e.target.value })}
+                placeholder="Enter FSSAI number"
+                className="h-10 md:h-12 text-sm md:text-base"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="gstNo">GST Number (Optional)</Label>
+              <Input
+                id="gstNo"
+                value={formData.gstNo}
+                onChange={(e) => setFormData({ ...formData, gstNo: e.target.value })}
+                placeholder="Enter GST number (optional)"
                 className="h-10 md:h-12 text-sm md:text-base"
               />
             </div>
