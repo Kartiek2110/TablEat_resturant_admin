@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import dynamic from 'next/dynamic'
 import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -10,6 +9,18 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { TrendingUp, DollarSign, ShoppingCart, Users, Star, Calendar, Clock, ChefHat, BarChart as BarChartIcon } from "lucide-react"
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  PieChart,
+  Pie,
+  Cell
+} from 'recharts'
 import { 
   subscribeToOrders,
   subscribeToMenuItems,
@@ -18,18 +29,6 @@ import {
   type Order,
   type MenuItem 
 } from '@/firebase/restaurant-service'
-
-// Dynamic imports for recharts to prevent SSR issues
-const ResponsiveContainer = dynamic(() => import('recharts').then(mod => mod.ResponsiveContainer), { ssr: false })
-const BarChart = dynamic(() => import('recharts').then(mod => mod.BarChart), { ssr: false })
-const Bar = dynamic(() => import('recharts').then(mod => mod.Bar), { ssr: false })
-const XAxis = dynamic(() => import('recharts').then(mod => mod.XAxis), { ssr: false })
-const YAxis = dynamic(() => import('recharts').then(mod => mod.YAxis), { ssr: false })
-const CartesianGrid = dynamic(() => import('recharts').then(mod => mod.CartesianGrid), { ssr: false })
-const Tooltip = dynamic(() => import('recharts').then(mod => mod.Tooltip), { ssr: false })
-const PieChart = dynamic(() => import('recharts').then(mod => mod.PieChart), { ssr: false })
-const Pie = dynamic(() => import('recharts').then(mod => mod.Pie), { ssr: false })
-const Cell = dynamic(() => import('recharts').then(mod => mod.Cell), { ssr: false })
 
 export default function AnalyticsPage() {
   const { restaurantName } = useAuth()
@@ -40,6 +39,11 @@ export default function AnalyticsPage() {
   const [endDate, setEndDate] = useState('')
   const [selectedMenuItem, setSelectedMenuItem] = useState('')
   const [isFiltering, setIsFiltering] = useState(false)
+  const [isMounted, setIsMounted] = useState(false)
+
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   useEffect(() => {
     if (!restaurantName) return
@@ -111,6 +115,10 @@ export default function AnalyticsPage() {
   }
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D']
+
+  if (!isMounted) {
+    return null
+  }
 
   if (loading) {
     return (
@@ -298,10 +306,7 @@ export default function AnalyticsPage() {
                     <XAxis dataKey="date" />
                     <YAxis />
                     <Tooltip 
-                      formatter={(value, name) => [
-                        name === 'revenue' ? `₹${value}` : value, 
-                        name === 'revenue' ? 'Revenue' : 'Orders'
-                      ]}
+                      formatter={(value: number) => [`₹${value}`, 'Revenue']}
                     />
                     <Bar dataKey="revenue" fill="#8884d8" />
                   </BarChart>
@@ -316,236 +321,30 @@ export default function AnalyticsPage() {
                 <CardDescription>Sales distribution across menu categories</CardDescription>
               </CardHeader>
               <CardContent>
-                {categoryChartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={categoryChartData}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ category, percent }) => `${category} ${percent ? (percent * 100).toFixed(0) : '0'}%`}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="revenue"
-                      >
-                        {categoryChartData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value) => [`₹${value}`, 'Revenue']} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex items-center justify-center h-[300px] text-gray-500">
-                    No category data available
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Payment Method and Order Source Charts */}
-          <div className="grid gap-4 md:grid-cols-2">
-            {/* Payment Method Distribution */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Payment Methods</CardTitle>
-                <CardDescription>Revenue breakdown by payment method</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {paymentMethodChartData && paymentMethodChartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={paymentMethodChartData}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ method, percent }) => `${method.toUpperCase()} ${percent ? (percent * 100).toFixed(2) : '0'}%`}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="revenue"
-                      >
-                        {paymentMethodChartData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value: any) => [`₹${Number(value).toFixed(2)}`, 'Revenue']} />  
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex items-center justify-center h-[300px] text-gray-500">
-                    No payment method data available
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Order Source Distribution */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Order Sources</CardTitle>
-                <CardDescription>Revenue from Quick Orders vs Regular Orders</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {orderSourceChartData && orderSourceChartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={orderSourceChartData}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ source, percent }) => `${source} ${percent ? (percent * 100).toFixed(2) : '0'}%`}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="revenue"
-                      >
-                        {orderSourceChartData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value: any) => [`₹${Number(value).toFixed(2)}`, 'Revenue']} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex items-center justify-center h-[300px] text-gray-500">
-                    No order source data available
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Payment Method and Order Source Stats Tables */}
-          <div className="grid gap-4 md:grid-cols-2">
-            {/* Payment Method Stats */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Payment Method Statistics</CardTitle>
-                <CardDescription>Detailed breakdown of payment preferences</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {paymentMethodChartData && paymentMethodChartData.length > 0 ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Payment Method</TableHead>
-                        <TableHead>Orders</TableHead>
-                        <TableHead>Revenue</TableHead>
-                        <TableHead>Avg Value</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {paymentMethodChartData.map((method, index) => (
-                        <TableRow key={method.method}>
-                          <TableCell className="font-medium">
-                            {method.method.toUpperCase()}
-                          </TableCell>
-                          <TableCell>{method.count}</TableCell>
-                          <TableCell>₹{method.revenue.toFixed(2)}</TableCell>
-                          <TableCell>₹{(method.revenue / method.count).toFixed(2)}</TableCell>
-                        </TableRow>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={categoryChartData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ category, percent }) => `${category} ${percent ? (percent * 100).toFixed(0) : '0'}%`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {categoryChartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <DollarSign className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>No payment method data available</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Order Source Stats */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Order Source Statistics</CardTitle>
-                <CardDescription>Performance comparison between order channels</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {orderSourceChartData && orderSourceChartData.length > 0 ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Order Source</TableHead>
-                        <TableHead>Orders</TableHead>
-                        <TableHead>Revenue</TableHead>
-                        <TableHead>Avg Value</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {orderSourceChartData.map((source, index) => (
-                        <TableRow key={source.sourceKey}>
-                          <TableCell className="font-medium">
-                            {source.source}
-                          </TableCell>
-                          <TableCell>{source.count}</TableCell>
-                          <TableCell>₹{source.revenue.toFixed(2)}</TableCell>
-                          <TableCell>₹{(source.revenue / source.count).toFixed(2)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <ShoppingCart className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>No order source data available</p>
-                  </div>
-                )}
+                    </Pie>
+                    <Tooltip 
+                      formatter={(value: number) => [`₹${value}`, 'Revenue']}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
               </CardContent>
             </Card>
           </div>
-
-          {/* Popular Items */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Popular Menu Items</CardTitle>
-              <CardDescription>Best-selling items based on completed orders</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {popularItems.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Rank</TableHead>
-                      <TableHead>Item Name</TableHead>
-                      <TableHead>Quantity Sold</TableHead>
-                      <TableHead>Revenue</TableHead>
-                      <TableHead>Performance</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {popularItems.map((item, index) => (
-                      <TableRow key={item.id}>
-                        <TableCell>
-                          <Badge variant={index < 3 ? "default" : "secondary"}>
-                            #{index + 1}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="font-medium">{item.name}</TableCell>
-                        <TableCell>{item.quantity} sold</TableCell>
-                        <TableCell>₹{item.revenue.toFixed(2)}</TableCell> 
-                        <TableCell>
-                          {index === 0 && <Badge className="bg-yellow-100 text-yellow-800">🏆 Top Seller</Badge>}
-                          {index === 1 && <Badge className="bg-gray-100 text-gray-800">🥈 Runner Up</Badge>}
-                          {index === 2 && <Badge className="bg-orange-100 text-orange-800">🥉 Third Place</Badge>}
-                          {index > 2 && <Badge variant="outline">Popular</Badge>}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <ChefHat className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No sales data available yet</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
         </>
       )}
     </div>
