@@ -61,7 +61,8 @@ export default function DebugNotificationsPage() {
         status: 'pending' as const,
         totalAmount: 299,
         notes: 'Debug test order',
-        orderSource: 'quick_order' as const
+        orderSource: 'quick_order' as const,
+        orderType: 'dine-in' as const
       }
 
       await createOrder(restaurantName, testOrder)

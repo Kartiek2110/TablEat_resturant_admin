@@ -26,7 +26,11 @@ export async function createRestaurant(name: string, adminEmail: string): Promis
       quick_order_approved: false,
       analytics_approved: false,
       customer_approved: true,
-      restaurant_open: true
+      restaurant_open: true,
+      address: '', // To be filled in profile page
+      phone: '', // To be filled in profile page
+      fssaiNo: '', // To be filled in profile page
+      gstNo: '' // Optional field
     }
 
     // Create restaurant document in restaurants collection

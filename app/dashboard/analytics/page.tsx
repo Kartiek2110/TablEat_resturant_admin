@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import dynamic from 'next/dynamic'
 import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -8,8 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
-import { TrendingUp, DollarSign, ShoppingCart, Users, Star, Calendar, Clock, ChefHat } from "lucide-react"
+import { TrendingUp, DollarSign, ShoppingCart, Users, Star, Calendar, Clock, ChefHat, BarChart as BarChartIcon } from "lucide-react"
 import { 
   subscribeToOrders,
   subscribeToMenuItems,
@@ -18,6 +18,18 @@ import {
   type Order,
   type MenuItem 
 } from '@/firebase/restaurant-service'
+
+// Dynamic imports for recharts to prevent SSR issues
+const ResponsiveContainer = dynamic(() => import('recharts').then(mod => mod.ResponsiveContainer), { ssr: false })
+const BarChart = dynamic(() => import('recharts').then(mod => mod.BarChart), { ssr: false })
+const Bar = dynamic(() => import('recharts').then(mod => mod.Bar), { ssr: false })
+const XAxis = dynamic(() => import('recharts').then(mod => mod.XAxis), { ssr: false })
+const YAxis = dynamic(() => import('recharts').then(mod => mod.YAxis), { ssr: false })
+const CartesianGrid = dynamic(() => import('recharts').then(mod => mod.CartesianGrid), { ssr: false })
+const Tooltip = dynamic(() => import('recharts').then(mod => mod.Tooltip), { ssr: false })
+const PieChart = dynamic(() => import('recharts').then(mod => mod.PieChart), { ssr: false })
+const Pie = dynamic(() => import('recharts').then(mod => mod.Pie), { ssr: false })
+const Cell = dynamic(() => import('recharts').then(mod => mod.Cell), { ssr: false })
 
 export default function AnalyticsPage() {
   const { restaurantName } = useAuth()
@@ -253,9 +265,9 @@ export default function AnalyticsPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-center py-16">
-              <div className="mx-auto w-24 h-24 bg-gradient-to-br from-purple-100 to-indigo-100 rounded-full flex items-center justify-center mb-6">
-                <BarChart className="h-12 w-12 text-purple-600" />
-              </div>
+                                  <div className="mx-auto w-24 h-24 bg-gradient-to-br from-purple-100 to-indigo-100 rounded-full flex items-center justify-center mb-6">
+                      <BarChartIcon className="h-12 w-12 text-purple-600" />
+                    </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">No Analytics Data Yet</h3>
               <p className="text-gray-600 mb-6 max-w-md mx-auto">
                 Your analytics will show here once you start receiving orders. 
@@ -312,7 +324,7 @@ export default function AnalyticsPage() {
                         cx="50%"
                         cy="50%"
                         labelLine={false}
-                        label={({ category, percent }) => `${category} ${(percent * 100).toFixed(0)}%`}
+                        label={({ category, percent }) => `${category} ${percent ? (percent * 100).toFixed(0) : '0'}%`}
                         outerRadius={80}
                         fill="#8884d8"
                         dataKey="revenue"
@@ -350,7 +362,7 @@ export default function AnalyticsPage() {
                         cx="50%"
                         cy="50%"
                         labelLine={false}
-                        label={({ method, percent }) => `${method.toUpperCase()} ${(percent * 100).toFixed(2)}%`}
+                        label={({ method, percent }) => `${method.toUpperCase()} ${percent ? (percent * 100).toFixed(2) : '0'}%`}
                         outerRadius={80}
                         fill="#8884d8"
                         dataKey="revenue"
@@ -359,7 +371,7 @@ export default function AnalyticsPage() {
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value: number) => [`₹${value.toFixed(2)}`, 'Revenue']} />  
+                      <Tooltip formatter={(value: any) => [`₹${Number(value).toFixed(2)}`, 'Revenue']} />  
                     </PieChart>
                   </ResponsiveContainer>
                 ) : (
@@ -385,7 +397,7 @@ export default function AnalyticsPage() {
                         cx="50%"
                         cy="50%"
                         labelLine={false}
-                        label={({ source, percent }) => `${source} ${(percent * 100).toFixed(2)}%`}
+                        label={({ source, percent }) => `${source} ${percent ? (percent * 100).toFixed(2) : '0'}%`}
                         outerRadius={80}
                         fill="#8884d8"
                         dataKey="revenue"
@@ -394,7 +406,7 @@ export default function AnalyticsPage() {
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value: number) => [`₹${value.toFixed(2)}`, 'Revenue']} />
+                      <Tooltip formatter={(value: any) => [`₹${Number(value).toFixed(2)}`, 'Revenue']} />
                     </PieChart>
                   </ResponsiveContainer>
                 ) : (

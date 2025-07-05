@@ -107,7 +107,8 @@ export async function processIncomingOrder(restaurantName: string, orderData: {
     const order: Omit<Order, 'id' | 'createdAt' | 'updatedAt'> = {
       ...orderData,
       status: 'pending',
-      orderSource: 'quick_order'
+      orderSource: 'quick_order',
+      orderType: 'dine-in'
     }
 
     await createOrder(restaurantName, order)
