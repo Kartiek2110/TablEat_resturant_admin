@@ -50,6 +50,8 @@ export default function LandingPage() {
   const { user, loading } = useAuth();
   const [isClient, setIsClient] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [displayedText, setDisplayedText] = useState("");
+  const fullText = "TablEat";
 
   useEffect(() => {
     setIsClient(true);
@@ -60,6 +62,23 @@ export default function LandingPage() {
       router.replace("/dashboard");
     }
   }, [user, loading, router]);
+
+  // Typing effect for TablEat
+  useEffect(() => {
+    let currentIndex = 0;
+    const typingInterval = setInterval(() => {
+      if (currentIndex <= fullText.length) {
+        setDisplayedText(fullText.slice(0, currentIndex));
+        currentIndex++;
+      } else {
+        // Reset for repetition
+        currentIndex = 0;
+        setDisplayedText("");
+      }
+    }, 150); // Adjust speed as needed
+
+    return () => clearInterval(typingInterval);
+  }, []);
 
   const scrollToSection = (sectionId: string) => {
     const element = document.getElementById(sectionId);
@@ -154,7 +173,7 @@ export default function LandingPage() {
                 Login
               </Button>
               <Button
-                onClick={() => router.push("/setup")}
+                onClick={() => router.push("/login")}
                 className="bg-blue-600 hover:bg-blue-700 hidden md:flex"
               >
                 Get Started
@@ -244,9 +263,12 @@ export default function LandingPage() {
             </Badge>
             <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
               Transform Your Restaurant with
+            </h1>
+            <h1 className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-orange-600 text-4xl md:text-6xl font-bold">
+              {" "}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-orange-600">
-                {" "}
-                TablEat
+                {displayedText}
+                <span className="animate-pulse text-2xl md:text-4xl">|</span>
               </span>
             </h1>
             <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
@@ -947,6 +969,7 @@ export default function LandingPage() {
             >
               Get Started Free
             </Button>
+
             <Button
               size="lg"
               variant="outline"
@@ -1002,22 +1025,6 @@ export default function LandingPage() {
                     Pricing
                   </button>
                 </li>
-                <li>
-                  <button
-                    onClick={() => router.push("/login")}
-                    className="hover:text-white"
-                  >
-                    Demo
-                  </button>
-                </li>
-                <li>
-                  <button
-                    onClick={() => scrollToSection("restaurants")}
-                    className="hover:text-white"
-                  >
-                    Case Studies
-                  </button>
-                </li>
               </ul>
             </div>
             <div>
@@ -1041,11 +1048,6 @@ export default function LandingPage() {
                 </li>
                 <li>
                   <a href="#" className="hover:text-white">
-                    Careers
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="hover:text-white">
                     Blog
                   </a>
                 </li>
@@ -1056,15 +1058,11 @@ export default function LandingPage() {
               <div className="space-y-2 text-gray-400">
                 <div className="flex items-center space-x-2">
                   <Mail className="h-4 w-4" />
-                  <span>hello@tableat.in</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Phone className="h-4 w-4" />
-                  <span>+91 98765 43210</span>
+                  <span>tableat4u@gmail.com</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <MapPin className="h-4 w-4" />
-                  <span>Bangalore, India</span>
+                  <span>Ghaziabad, India</span>
                 </div>
               </div>
             </div>

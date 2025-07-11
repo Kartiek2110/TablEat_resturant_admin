@@ -1,11 +1,28 @@
-"use client"
+"use client";
 
-import { Home, Utensils, ClipboardList, BarChart, Bell, Table, LogOut, Users, ChevronDown, UserCircle, Receipt, Package, UserCheck } from "lucide-react"
-import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
-import { useMemo, useEffect, useState } from "react"
-import { useAuth } from "@/contexts/AuthContext"
-import { getRestaurantByAdminEmail, Restaurant } from "@/firebase/restaurant-service"
+import {
+  Home,
+  Utensils,
+  ClipboardList,
+  BarChart,
+  Bell,
+  Table,
+  LogOut,
+  Users,
+  ChevronDown,
+  UserCircle,
+  Receipt,
+  Package,
+  UserCheck,
+} from "lucide-react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useMemo, useEffect, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  getRestaurantByAdminEmail,
+  Restaurant,
+} from "@/firebase/restaurant-service";
 // import { firebaseSignOut } from "@/firebase/auth" // Commented out Firebase import
 
 import {
@@ -19,9 +36,14 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-} from "@/components/ui/sidebar"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Button } from "@/components/ui/button"
+} from "@/components/ui/sidebar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
 
 const navItems = [
   {
@@ -79,79 +101,82 @@ const navItems = [
     href: "/dashboard/profile",
     icon: UserCircle,
   },
-]
+];
 
 export function AppSidebar() {
-  const pathname = usePathname()
-  const router = useRouter()
-  const { user, restaurant } = useAuth()
+  const pathname = usePathname();
+  const router = useRouter();
+  const { restaurant, logout } = useAuth();
 
   const handleLogout = async () => {
-    // const result = await firebaseSignOut() // Commented out Firebase logout call
-    // if (result.success) { // Commented out Firebase-related logic
-    router.push("/login") // Always navigate to login for UI preview
-    // } else { // Commented out Firebase-related logic
-    //   console.error("Logout failed:", result.error) // Commented out Firebase-related logic
-    //   alert("Failed to log out. Please try again.") // Commented out Firebase-related logic
-    // }
-  }
+    await logout();
+    router.push("/login");
+  };
 
   // Filter navigation items based on approval status
   const memoizedNavItems = useMemo(() => {
     // Debug: Log restaurant permissions
-    console.log('🔍 Sidebar: Restaurant data:', restaurant)
-    console.log('🔍 Sidebar: Permissions:', {
+    console.log("🔍 Sidebar: Restaurant data:", restaurant);
+    console.log("🔍 Sidebar: Permissions:", {
       quick_order_approved: restaurant?.quick_order_approved,
       analytics_approved: restaurant?.analytics_approved,
       customer_approved: restaurant?.customer_approved,
       inventory_management_approved: restaurant?.inventory_management_approved,
-      staff_management_approved: restaurant?.staff_management_approved
-    })
+      staff_management_approved: restaurant?.staff_management_approved,
+    });
 
-    return navItems.filter(item => {
+    return navItems.filter((item) => {
       // Always show these items
-      if (!["Quick Order", "Analytics", "Customers", "Inventory", "Staff Management"].includes(item.title)) {
-        return true
+      if (
+        ![
+          "Quick Order",
+          "Analytics",
+          "Customers",
+          "Inventory",
+          "Staff Management",
+        ].includes(item.title)
+      ) {
+        return true;
       }
-      
+
       // Show Quick Order only if approved
       if (item.title === "Quick Order") {
-        const shouldShow = restaurant?.quick_order_approved === true
-        console.log(`🔍 Quick Order should show: ${shouldShow}`)
-        return shouldShow
+        const shouldShow = restaurant?.quick_order_approved === true;
+        console.log(`🔍 Quick Order should show: ${shouldShow}`);
+        return shouldShow;
       }
-      
+
       // Show Analytics only if approved
       if (item.title === "Analytics") {
-        const shouldShow = restaurant?.analytics_approved === true
-        console.log(`🔍 Analytics should show: ${shouldShow}`)
-        return shouldShow
+        const shouldShow = restaurant?.analytics_approved === true;
+        console.log(`🔍 Analytics should show: ${shouldShow}`);
+        return shouldShow;
       }
-      
+
       // Show Customers only if approved
       if (item.title === "Customers") {
-        const shouldShow = restaurant?.customer_approved === true
-        console.log(`🔍 Customers should show: ${shouldShow}`)
-        return shouldShow
+        const shouldShow = restaurant?.customer_approved === true;
+        console.log(`🔍 Customers should show: ${shouldShow}`);
+        return shouldShow;
       }
-      
+
       // Show Inventory only if approved
       if (item.title === "Inventory") {
-        const shouldShow = restaurant?.inventory_management_approved === true
-        console.log(`🔍 Inventory should show: ${shouldShow}`)
-        return shouldShow
+        const shouldShow = restaurant?.inventory_management_approved === true;
+        console.log(`🔍 Inventory should show: ${shouldShow}`);
+        return shouldShow;
       }
-      
+
       // Show Staff Management only if approved
       if (item.title === "Staff Management") {
-        const shouldShow = restaurant?.staff_management_approved === true
-        console.log(`🔍 Staff Management should show: ${shouldShow}`)
-        return shouldShow
+        const shouldShow = restaurant?.staff_management_approved === true;
+        console.log(`🔍 Staff Management should show: ${shouldShow}`);
+        return shouldShow;
       }
-      
-      return true
-    })
-  }, [restaurant])
+
+      return true;
+    });
+  }, [restaurant]);
 
   return (
     <Sidebar className="bg-sidebar-background text-sidebar-foreground border-r border-sidebar-border">
@@ -179,7 +204,9 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground/70">Navigation</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-sidebar-foreground/70">
+            Navigation
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {memoizedNavItems.map((item) => (
@@ -215,5 +242,5 @@ export function AppSidebar() {
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
-  )
+  );
 }

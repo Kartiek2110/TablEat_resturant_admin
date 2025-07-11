@@ -57,7 +57,7 @@ export default function QuickOrderPage() {
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState<string>('all')
+  const [selectedCategory, setSelectedCategory] = useState<string>('All')
   const [cart, setCart] = useState<CartItem[]>([])
   const [isCartOpen, setIsCartOpen] = useState(false)
   
@@ -122,6 +122,9 @@ export default function QuickOrderPage() {
       item.category.toLowerCase().includes(searchTerm.toLowerCase())
     )
   }
+
+  // Sort by price (lowest first)
+  filteredItems = filteredItems.sort((a, b) => a.price - b.price)
 
   const addToCart = (menuItem: MenuItem) => {
     const existingItem = cart.find(item => item.menuItemId === menuItem.id)
