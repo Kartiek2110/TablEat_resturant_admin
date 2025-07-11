@@ -95,7 +95,7 @@ NavigationHeader.displayName = 'NavigationHeader'
 // Main Layout Content
 function LayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const showSidebar = pathname !== "/login"
+  const showSidebar = pathname !== "/login" && pathname !== "/"
 
   if (!showSidebar) {
     return <main className="min-h-screen bg-background">{children}</main>
@@ -118,8 +118,8 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   
-  // Don't protect login page
-  if (pathname === "/login") {
+  // Don't protect login page and landing page
+  if (pathname === "/login" || pathname === "/") {
     return <LayoutContent>{children}</LayoutContent>
   }
 
