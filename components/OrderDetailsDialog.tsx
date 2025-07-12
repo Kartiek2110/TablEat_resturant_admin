@@ -44,6 +44,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { doc, updateDoc } from "firebase/firestore";
+import { db } from "@/firebase/config";
 
 interface OrderDetailsDialogProps {
   order: Order | null;
@@ -63,6 +65,8 @@ export default function OrderDetailsDialog({
   );
   const [showPhoneDialog, setShowPhoneDialog] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [discountType, setDiscountType] = useState<"percentage" | "fixed">("percentage");
+  const [discountValue, setDiscountValue] = useState<string>("");
 
   if (!order) return null;
 
@@ -91,7 +95,11 @@ export default function OrderDetailsDialog({
       await updateOrderStatus(restaurantName, order.id, newStatus);
 
       // If order is served, free up the table (only for dine-in orders)
-      if (newStatus === "served" && order.orderType === "dine-in" && order.tableNumber > 0) {
+      if (
+        newStatus === "served" &&
+        order.orderType === "dine-in" &&
+        order.tableNumber > 0
+      ) {
         await updateTableStatus(restaurantName, order.tableNumber, false);
       }
 
@@ -109,6 +117,23 @@ export default function OrderDetailsDialog({
 
     setIsProcessing(true);
     try {
+      // Create updated order data with discount information
+      const updatedOrderData = {
+        ...order,
+        discount: {
+          type: discountType,
+          value: parseFloat(discountValue) || 0,
+          amount: discountAmount
+        },
+        subtotal: subtotal,
+        tax: tax,
+        finalAmount: total // This is the amount after discount and tax
+      };
+
+      // Update order data first
+      const orderRef = doc(db, 'restaurants', restaurantName, 'orders', order.id);
+      await updateDoc(orderRef, updatedOrderData);
+
       // Update order status to served
       await updateOrderStatus(restaurantName, order.id, "served");
 
@@ -127,63 +152,9 @@ export default function OrderDetailsDialog({
     }
   };
 
-  const generateBillMessage = (order: any) => {
-    const restaurantNameFormatted =
-      restaurantName?.replace(/_/g, " ") || "Restaurant";
-    const itemsList = order.items
-      .map(
-        (item: any) =>
-          `${item.quantity}x ${item.name} - ₹${(
-            item.price * item.quantity
-          ).toFixed(2)}`
-      )
-      .join("\n");
-
-    // Calculate tax only if enabled
-    const taxAmount = restaurant?.taxEnabled 
-      ? (order.totalAmount * (restaurant?.taxRate || 0)) / 100 
-      : 0;
-    const totalWithTax = order.totalAmount + taxAmount;
-
-    // Generate bill number in format: RN/2024-25/001
-    const currentYear = new Date().getFullYear()
-    const financialYear = `${currentYear}-${(currentYear + 1).toString().slice(-2)}`
-    const restaurantInitials = restaurantNameFormatted.split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 2)
-    const billNumber = `${restaurantInitials}/${financialYear}/${order.dailyOrderNumber?.toString().padStart(3, '0') || order.id.slice(-3)}`
-
-    const taxLine = restaurant?.taxEnabled && restaurant?.taxRate && restaurant.taxRate > 0
-      ? `🏷️ Tax (${restaurant.taxRate}%): ₹${taxAmount.toFixed(2)}\n━━━━━━━━━━━━━━━━\n`
-      : '';
-
-    return `🧾 *${restaurantNameFormatted.toUpperCase()}*
-${restaurant?.address || 'Restaurant Address'}
-📞 ${restaurant?.phone || 'Phone Number'}
-🍽️ FSSAI: ${restaurant?.fssaiNo || 'FSSAI Number'}${restaurant?.gstNo ? `\n💼 GST: ${restaurant.gstNo}` : ''}
-━━━━━━━━━━━━━━━━
-*INVOICE*
-━━━━━━━━━━━━━━━━
-📅 Date: ${new Date().toLocaleDateString()}
-🕐 Time: ${new Date().toLocaleTimeString()}
-👤 Customer: ${order.customerName || "Walk-in Customer"}
-${order.orderType === 'pickup' ? '📦 Order Type: Pickup' : `🍽️ Table: ${order.tableNumber || "N/A"}`}
-🆔 Bill No.: ${billNumber}
-
-📋 *ORDER DETAILS:*
-${itemsList}
-━━━━━━━━━━━━━━━━
-💰 Total Value: ₹${order.totalAmount.toFixed(2)}
-${taxLine}💵 *TOTAL AMOUNT: ₹${totalWithTax.toFixed(2)}*
-💳 Payment: ${paymentMethod.toUpperCase()}
-
-Thank you for dining with us! 🙏
-Visit us again soon! ✨
-
-Powered by TablEat 🍽️`;
-  };
-
   const handleWhatsAppBill = async () => {
     // Check if customer has phone number
-    if (!order.customerPhone || order.customerPhone.trim() === '') {
+    if (!order.customerPhone || order.customerPhone.trim() === "") {
       toast.error(
         "Customer phone number not available. Please add customer phone number to send e-bill."
       );
@@ -193,61 +164,116 @@ Powered by TablEat 🍽️`;
     try {
       toast.info("Sending e-bill to customer...", { duration: 2000 });
 
+      // Generate bill number
+      const currentYear = new Date().getFullYear();
+      const financialYear = `${currentYear}-${(currentYear + 1).toString().slice(-2)}`;
+      const restaurantInitials = (restaurantName?.replace(/_/g, " ") || "Restaurant")
+        .split(" ")
+        .map((word) => word[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2);
+      const billNumber = `${restaurantInitials}/${financialYear}/${
+        order.dailyOrderNumber?.toString().padStart(3, "0") || order.id.slice(-3)
+      }`;
+
       // Check if WhatsApp API is configured
       if (whatsappService.isConfigured()) {
-        // Method 1: Send PDF bill via API
         try {
           const billData = {
-            order,
+            order: {
+              ...order,
+              discount: {
+                type: discountType,
+                value: parseFloat(discountValue) || 0,
+                amount: discountAmount
+              },
+              subtotal,
+              tax,
+              finalAmount: total
+            },
+            billNumber,
             restaurantName: restaurantName || "Restaurant",
-            restaurantAddress: restaurant?.address || "Restaurant Address",
-            restaurantPhone: restaurant?.phone || "Phone Number",
-            fssaiNo: restaurant?.fssaiNo || "FSSAI Number",
-            gstNo: restaurant?.gstNo,
-            taxRate: restaurant?.taxRate,
-            taxEnabled: restaurant?.taxEnabled
+            restaurantAddress: restaurant?.address || "",
+            restaurantPhone: restaurant?.phone || "",
+            fssaiNo: restaurant?.fssaiNo || "",
+            gstNo: restaurant?.gstNo || "",
+            taxRate: restaurant?.taxRate || 0,
+            taxEnabled: restaurant?.taxEnabled || false,
+            paymentMethod
           };
 
           // Generate PDF bill
           const pdfBase64 = await PDFGenerator.generateBillPDF(billData);
-          
-          // Generate text message
-          const textBill = PDFGenerator.generateTextBill(billData);
-          
+
           // Send PDF via WhatsApp API
           const result = await whatsappService.sendDocument(
             order.customerPhone,
-            `🧾 Your bill from ${restaurantName?.replace(/_/g, ' ')} is ready!\n\n${textBill}`,
+            `Thank you for dining at ${restaurantName?.replace(/_/g, " ")}!\n\nYour bill is attached.`,
             pdfBase64,
-            `bill-${order.id.slice(-6)}.pdf`
+            `bill-${billNumber}.pdf`
           );
 
           if (result.success) {
             toast.success(`E-bill sent successfully to ${order.customerPhone}! 📱`);
             return;
           } else {
-            console.warn('API send failed, trying text message:', result.error);
-            
-            // Fallback: Send text message only
-            const textResult = await whatsappService.sendMessage(order.customerPhone, textBill);
-            if (textResult.success) {
-              toast.success(`Text bill sent successfully to ${order.customerPhone}! 📱`);
-              return;
-            } else {
-              throw new Error(textResult.error);
-            }
+            throw new Error(result.error);
           }
         } catch (apiError) {
-          console.warn('WhatsApp API failed, falling back to web method:', apiError);
-          // Continue to fallback method below
+          console.error("WhatsApp API error:", apiError);
+          throw apiError; // Re-throw to be caught by outer try-catch
         }
-      }
+      } else {
+        // Fallback to WhatsApp Web if API is not configured
+        const invoiceContent = `
+*${restaurantName?.replace(/_/g, " ") || "Restaurant"}*
+${restaurant?.address || ""}
+${restaurant?.phone ? `📞 ${restaurant.phone}` : ""}
+${restaurant?.fssaiNo ? `FSSAI: ${restaurant.fssaiNo}` : ""}
+${restaurant?.gstNo ? `GST: ${restaurant.gstNo}` : ""}
+----------------------------
+TAX INVOICE
+----------------------------
+Bill No: ${billNumber}
+Date: ${new Date().toLocaleDateString()}
+Time: ${new Date().toLocaleTimeString()}
+Customer: ${order.customerName || "Walk-in Customer"}
+Table: ${order.tableNumber || "N/A"}
+Order Type: ${order.orderType === "pickup" ? "Pickup" : "Dine-in"}
 
-      // Method 2: Fallback - Open WhatsApp Web (current method)
-      const billMessage = generateBillMessage(order);
-      whatsappService.openWhatsAppWeb(order.customerPhone, billMessage);
-      toast.success("Opening WhatsApp to send e-bill...");
-      
+*ORDER DETAILS:*
+${order.items
+  .map(
+    (item) =>
+      `${item.quantity}x ${item.name}
+Price: ₹${item.price.toFixed(2)}
+Amount: ₹${(item.price * item.quantity).toFixed(2)}`
+  )
+  .join("\n\n")}
+
+----------------------------
+Subtotal: ₹${subtotal.toFixed(2)}
+${
+  discountValue && parseFloat(discountValue) > 0
+    ? `Discount ${
+        discountType === "percentage" ? `(${discountValue}%)` : ""
+      }: -₹${discountAmount.toFixed(2)}\n`
+    : ""
+}${
+  restaurant?.taxEnabled && restaurant?.taxRate && restaurant.taxRate > 0
+    ? `Tax (${restaurant.taxRate}%): ₹${tax.toFixed(2)}\n`
+    : ""
+}----------------------------
+*TOTAL AMOUNT: ₹${total.toFixed(2)}*
+Payment Mode: ${paymentMethod.toUpperCase()}
+
+Thank you for dining with us!
+Visit again!`;
+
+        whatsappService.openWhatsAppWeb(order.customerPhone, invoiceContent);
+        toast.success("Opening WhatsApp to send e-bill...");
+      }
     } catch (error) {
       console.error("Error sending WhatsApp bill:", error);
       toast.error("Failed to send WhatsApp bill. Please try again.");
@@ -255,45 +281,130 @@ Powered by TablEat 🍽️`;
   };
 
   const handlePrintInvoice = () => {
-    // Create invoice content
+    // Generate bill number in format: RN/2024-25/001
+    const currentYear = new Date().getFullYear();
+    const financialYear = `${currentYear}-${(currentYear + 1).toString().slice(-2)}`;
+    const restaurantInitials = (restaurantName?.replace(/_/g, " ") || "Restaurant")
+      .split(" ")
+      .map((word) => word[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+    const billNumber = `${restaurantInitials}/${financialYear}/${
+      order.dailyOrderNumber?.toString().padStart(3, "0") || order.id.slice(-3)
+    }`;
+
     const invoiceContent = `
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Invoice - Order #${order.id.slice(-6)}</title>
+          <title>Invoice #${billNumber}</title>
           <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; }
-            .details { margin: 20px 0; }
-            .items { width: 100%; border-collapse: collapse; margin: 20px 0; }
-            .items th, .items td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-            .items th { background-color: #f2f2f2; }
-            .total { text-align: right; font-size: 18px; font-weight: bold; }
-            .footer { margin-top: 30px; text-align: center; color: #666; }
+            @page { margin: 10mm; }
+            body { 
+              font-family: 'Courier New', monospace; 
+              margin: 0;
+              padding: 10px;
+              font-size: 12px;
+              line-height: 1.3;
+            }
+            .header { 
+              text-align: center;
+              border-bottom: 1px dashed #000;
+              padding-bottom: 10px;
+              margin-bottom: 10px;
+            }
+            .restaurant-name {
+              font-size: 20px;
+              font-weight: bold;
+              margin: 0 0 5px 0;
+            }
+            .restaurant-details {
+              margin: 5px 0;
+              font-size: 11px;
+            }
+            .bill-title {
+              font-size: 16px;
+              font-weight: bold;
+              text-align: center;
+              margin: 10px 0;
+              border-bottom: 1px dashed #000;
+              padding-bottom: 5px;
+            }
+            .details { 
+              margin: 10px 0;
+              font-size: 11px;
+            }
+            .items { 
+              width: 100%;
+              border-collapse: collapse;
+              margin: 10px 0;
+              font-size: 11px;
+            }
+            .items th { 
+              border-bottom: 1px dashed #000;
+              padding: 5px;
+              text-align: left;
+            }
+            .items td { 
+              padding: 3px 5px;
+            }
+            .total-section {
+              margin-top: 10px;
+              border-top: 1px dashed #000;
+              padding-top: 5px;
+            }
+            .total-row {
+              display: flex;
+              justify-content: space-between;
+              margin: 3px 0;
+              font-size: 11px;
+            }
+            .grand-total {
+              font-size: 14px;
+              font-weight: bold;
+              margin-top: 5px;
+              border-top: 1px dashed #000;
+              padding-top: 5px;
+            }
+            .footer { 
+              margin-top: 20px;
+              text-align: center;
+              font-size: 11px;
+              border-top: 1px dashed #000;
+              padding-top: 10px;
+            }
+            .discount { font-weight: bold; }
           </style>
         </head>
         <body>
           <div class="header">
-            <h1>${restaurantName?.replace(/_/g, " ") || "Restaurant"}</h1>
-            <p>Invoice #${order.id.slice(-6)}</p>
-            <p>Date: ${new Date().toLocaleDateString()}</p>
+            <div class="restaurant-name">${restaurantName?.replace(/_/g, " ") || "Restaurant"}</div>
+            ${restaurant?.address ? `<div class="restaurant-details">${restaurant.address}</div>` : ""}
+            ${restaurant?.phone ? `<div class="restaurant-details">📞 ${restaurant.phone}</div>` : ""}
+            ${restaurant?.fssaiNo ? `<div class="restaurant-details">FSSAI: ${restaurant.fssaiNo}</div>` : ""}
+            ${restaurant?.gstNo ? `<div class="restaurant-details">GST: ${restaurant.gstNo}</div>` : ""}
           </div>
           
+          <div class="bill-title">TAX INVOICE</div>
+          
           <div class="details">
-            <p><strong>Customer:</strong> ${order.customerName}</p>
-            <p><strong>Phone:</strong> ${order.customerPhone}</p>
-            <p><strong>Table:</strong> ${order.tableNumber}</p>
-            <p><strong>Order Time:</strong> ${order.createdAt.toLocaleString()}</p>
-            <p><strong>Payment Method:</strong> ${paymentMethod.toUpperCase()}</p>
+            <div>Bill No: ${billNumber}</div>
+            <div>Date: ${new Date().toLocaleDateString()}</div>
+            <div>Time: ${new Date().toLocaleTimeString()}</div>
+            <div>Customer: ${order.customerName || "Walk-in Customer"}</div>
+            <div>Phone: ${order.customerPhone || "N/A"}</div>
+            <div>Table: ${order.tableNumber || "N/A"}</div>
+            <div>Order Type: ${order.orderType === "pickup" ? "Pickup" : "Dine-in"}</div>
           </div>
           
           <table class="items">
             <thead>
               <tr>
                 <th>Item</th>
-                <th>Quantity</th>
-                <th>Price</th>
-                <th>Total</th>
+                <th>Qty</th>
+                <th>Rate</th>
+                <th>Amt</th>
               </tr>
             </thead>
             <tbody>
@@ -303,7 +414,7 @@ Powered by TablEat 🍽️`;
                 <tr>
                   <td>${item.name}</td>
                   <td>${item.quantity}</td>
-                  <td>₹${item.price}</td>
+                  <td>₹${item.price.toFixed(2)}</td>
                   <td>₹${(item.price * item.quantity).toFixed(2)}</td>
                 </tr>
               `
@@ -312,12 +423,40 @@ Powered by TablEat 🍽️`;
             </tbody>
           </table>
           
-          <div class="total">
-            <p>Total Amount: ₹${order.totalAmount.toFixed(2)}</p>
+          <div class="total-section">
+            <div class="total-row">
+              <span>Subtotal:</span>
+              <span>₹${subtotal.toFixed(2)}</span>
+            </div>
+            ${
+              discountValue && parseFloat(discountValue) > 0
+                ? `<div class="total-row discount">
+                    <span>Discount ${discountType === "percentage" ? `(${discountValue}%)` : ""}:</span>
+                    <span>-₹${discountAmount.toFixed(2)}</span>
+                   </div>`
+                : ""
+            }
+            ${
+              restaurant?.taxEnabled && restaurant?.taxRate && restaurant.taxRate > 0
+                ? `<div class="total-row">
+                    <span>Tax (${restaurant.taxRate}%):</span>
+                    <span>₹${tax.toFixed(2)}</span>
+                   </div>`
+                : ""
+            }
+            <div class="total-row grand-total">
+              <span>Grand Total:</span>
+              <span>₹${total.toFixed(2)}</span>
+            </div>
+            <div class="total-row">
+              <span>Payment Mode:</span>
+              <span>${paymentMethod.toUpperCase()}</span>
+            </div>
           </div>
           
           <div class="footer">
             <p>Thank you for dining with us!</p>
+            <p>Visit again!</p>
             <p>Powered by TablEat</p>
           </div>
         </body>
@@ -337,11 +476,19 @@ Powered by TablEat 🍽️`;
     (sum, item) => sum + item.price * item.quantity,
     0
   );
-  // Calculate tax only if enabled
-  const tax = restaurant?.taxEnabled && restaurant?.taxRate 
-    ? (subtotal * restaurant.taxRate) / 100 
+
+  // Calculate discount
+  const discountAmount = discountType === "percentage" 
+    ? (subtotal * (parseFloat(discountValue) || 0)) / 100
+    : parseFloat(discountValue) || 0;
+
+  // Calculate tax only if enabled (on discounted amount)
+  const taxableAmount = subtotal - discountAmount;
+  const tax = restaurant?.taxEnabled && restaurant?.taxRate
+    ? (taxableAmount * restaurant.taxRate) / 100
     : 0;
-  const total = subtotal + tax;
+
+  const total = taxableAmount + tax;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -388,8 +535,11 @@ Powered by TablEat 🍽️`;
               <div className="flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-gray-500" />
                 <span>
-                  {order.orderType === 'pickup' ? (
-                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                  {order.orderType === "pickup" ? (
+                    <Badge
+                      variant="outline"
+                      className="bg-blue-50 text-blue-700 border-blue-200"
+                    >
                       📦 Pickup
                     </Badge>
                   ) : (
@@ -459,19 +609,55 @@ Powered by TablEat 🍽️`;
                 Bill Summary
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="flex justify-between">
-                <span>Subtotal</span>
-                <span>₹{subtotal.toFixed(2)}</span>
+            <CardContent className="space-y-4">
+              {/* Discount Section */}
+              <div className="space-y-2">
+                <Label>Apply Discount</Label>
+                <div className="flex gap-2">
+                  <Select
+                    value={discountType}
+                    onValueChange={(value: "percentage" | "fixed") => setDiscountType(value)}
+                  >
+                    <SelectTrigger className="w-[120px]">
+                      <SelectValue placeholder="Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="percentage">Percentage</SelectItem>
+                      <SelectItem value="fixed">Fixed (₹)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    placeholder={discountType === "percentage" ? "Enter %" : "Enter amount"}
+                    value={discountValue}
+                    onChange={(e) => setDiscountValue(e.target.value)}
+                    className="w-[150px]"
+                  />
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span>Tax (5%)</span>
-                <span>₹{tax.toFixed(2)}</span>
-              </div>
-              <Separator />
-              <div className="flex justify-between font-bold text-lg">
-                <span>Total</span>
-                <span>₹{total.toFixed(2)}</span>
+
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Subtotal</span>
+                  <span>₹{subtotal.toFixed(2)}</span>
+                </div>
+                {discountValue && parseFloat(discountValue) > 0 && (
+                  <div className="flex justify-between text-sm text-green-600">
+                    <span>Discount {discountType === "percentage" ? `(${discountValue}%)` : ""}</span>
+                    <span>-₹{discountAmount.toFixed(2)}</span>
+                  </div>
+                )}
+                {restaurant?.taxEnabled && restaurant?.taxRate && restaurant.taxRate > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span>Tax ({restaurant.taxRate}%)</span>
+                    <span>₹{tax.toFixed(2)}</span>
+                  </div>
+                )}
+                <Separator />
+                <div className="flex justify-between font-bold">
+                  <span>Total</span>
+                  <span>₹{total.toFixed(2)}</span>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -520,13 +706,14 @@ Powered by TablEat 🍽️`;
                     onClick={handleWhatsAppBill}
                     variant="outline"
                     className="flex-1 bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
-                    disabled={!order.customerPhone || order.customerPhone.trim() === ''}
+                    disabled={
+                      !order.customerPhone || order.customerPhone.trim() === ""
+                    }
                   >
                     <MessageCircle className="h-4 w-4 mr-2" />
-                    {order.customerPhone 
-                      ? `Send to ${order.customerPhone}` 
-                      : 'WhatsApp E-Bill (No Phone)'
-                    }
+                    {order.customerPhone
+                      ? `Send to ${order.customerPhone}`
+                      : "WhatsApp E-Bill (No Phone)"}
                   </Button>
                 </div>
                 <Button

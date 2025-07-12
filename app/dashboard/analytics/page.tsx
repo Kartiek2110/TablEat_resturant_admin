@@ -321,27 +321,27 @@ export default function AnalyticsPage() {
                 <CardDescription>Sales distribution across menu categories</CardDescription>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={categoryChartData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ category, percent }) => `${category} ${percent ? (percent * 100).toFixed(0) : '0'}%`}
-                      outerRadius={80}
-                      fill="#8884d8"
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={categoryChartData}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ category, percent }) => `${category} ${percent ? (percent * 100).toFixed(0) : '0'}%`}
+                        outerRadius={80}
+                        fill="#8884d8"
                       dataKey="value"
-                    >
-                      {categoryChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
+                      >
+                        {categoryChartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
                     <Tooltip 
                       formatter={(value: number) => [`₹${value}`, 'Revenue']}
                     />
-                  </PieChart>
-                </ResponsiveContainer>
+                    </PieChart>
+                  </ResponsiveContainer>
               </CardContent>
             </Card>
           </div>
