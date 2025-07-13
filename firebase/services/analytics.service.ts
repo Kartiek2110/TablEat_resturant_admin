@@ -57,12 +57,46 @@ export function getOrderAnalytics(orders: Order[], menuItems: MenuItem[]) {
     .map(([category, data]) => ({ category, ...data }))
     .sort((a, b) => b.revenue - a.revenue)
 
+  // Payment method analytics
+  const paymentMethodData = new Map<string, { count: number; revenue: number }>()
+  completedOrders.forEach(order => {
+    const method = order.paymentMethod || 'cash' // default to cash if not specified
+    const existing = paymentMethodData.get(method) || { count: 0, revenue: 0 }
+    existing.count += 1
+    existing.revenue += order.totalAmount
+    paymentMethodData.set(method, existing)
+  })
+
+  const paymentMethodChartData = Array.from(paymentMethodData.entries())
+    .map(([method, data]) => ({ method, ...data }))
+    .sort((a, b) => b.revenue - a.revenue)
+
+  // Order source analytics
+  const orderSourceData = new Map<string, { count: number; revenue: number }>()
+  completedOrders.forEach(order => {
+    const source = order.orderSource || 'direct_order' // default to direct_order if not specified
+    const existing = orderSourceData.get(source) || { count: 0, revenue: 0 }
+    existing.count += 1
+    existing.revenue += order.totalAmount
+    orderSourceData.set(source, existing)
+  })
+
+  const orderSourceChartData = Array.from(orderSourceData.entries())
+    .map(([source, data]) => ({ 
+      source: source === 'quick_order' ? 'Quick Order' : 'Regular Order', 
+      sourceKey: source,
+      ...data 
+    }))
+    .sort((a, b) => b.revenue - a.revenue)
+
   return {
     totalRevenue,
     averageOrderValue: completedOrders.length > 0 ? totalRevenue / completedOrders.length : 0,
     popularItems,
     dailyRevenue,
     categoryChartData,
+    paymentMethodChartData,
+    orderSourceChartData,
     totalOrders: orders.length,
     completedOrders: completedOrders.length,
     pendingOrders: orders.filter(order => ['pending', 'preparing', 'ready'].includes(order.status)).length
